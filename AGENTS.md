@@ -50,7 +50,7 @@ Operational and architectural instructions for AI coding agents (including Antig
     Tests must produce consistent, reproducible outcomes. Avoid flakiness, race conditions, non-mocked external network calls, or reliance on nondeterministic LLM outputs in test suites.
 
 14. **Run all available validation before reporting completion.**
-    Execute relevant linters, type checks, build steps, and test suites prior to completing any work unit.
+    Execute relevant linters, type checks, build steps, and test suites prior to completing any work unit (including `python scripts/validate_repository.py` for repository-level integrity).
 
 15. **Report exactly what changed, what was tested, and any unresolved concerns.**
     Provide a transparent, concise final summary including previous state, branch name, file modifications, validation results, current git status, and any architectural risks or assumptions.

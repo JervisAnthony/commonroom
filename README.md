@@ -64,11 +64,13 @@ commonroom/
 
 ---
 
-## Development Principles & Agent Guidelines
+## Development & Governance
 
-- All development is performed on dedicated feature branches cut from `main`.
+- All development is performed on dedicated feature branches cut from `main` following our [Contribution Workflow](CONTRIBUTING.md).
 - Product boundaries, privacy invariants, and canonical content tiering must be strictly maintained.
-- AI coding agents and contributors must follow the rules defined in [AGENTS.md](AGENTS.md).
+- AI coding agents and contributors must follow the operational invariants defined in [AGENTS.md](AGENTS.md).
+- Security policies, vulnerability reporting, and priority tiers are documented in [SECURITY.md](SECURITY.md).
+- Repository integrity is validated locally and in CI using `python scripts/validate_repository.py`.
 
 ---
 
