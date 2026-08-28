@@ -122,7 +122,8 @@ graph TD
 `packages/commonroom-core` provides shared domain models and contracts across the ecosystem:
 
 1. **Technology-Neutral Source of Truth**:
-   - Cross-application contracts are authored in standard, portable formats: **OpenAPI specifications**, **JSON Schema**, and versioned schema files.
+   - Cross-application contracts are authored in standard, portable formats: **JSON Schema (Draft 2020-12)** and **OpenAPI specifications**.
+   - Canonical schemas are maintained in [`packages/commonroom-core/schemas/`](../packages/commonroom-core/schemas/) and tracked in [manifest.json](../packages/commonroom-core/schemas/manifest.json).
    - Core is **not** an npm-only or Python-only package.
 2. **Language Adaptations**:
    - TypeScript types and Python Pydantic models will be generated or adapted from these neutral schemas.

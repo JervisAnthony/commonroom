@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:commonroom:schema:v1:user-reference",
+  "title": "UserReference",
+  "description": "Minimal cross-product reference to a Commonroom user identity.",
+  "type": "object",
+  "required": [
+    "user_id"
+  ],
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for the user in canonical UUID format."
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 50,
+      "description": "User-facing display name."
+    }
+  },
+  "additionalProperties": false
+}
+

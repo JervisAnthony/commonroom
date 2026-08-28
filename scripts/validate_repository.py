@@ -14,6 +14,12 @@ import re
 import sys
 from typing import List, Tuple
 
+script_dir = os.path.dirname(os.path.abspath(__file__))
+if script_dir not in sys.path:
+    sys.path.insert(0, script_dir)
+
+from validate_contract_schemas import validate_contract_schemas
+
 # Core apps recognized in the ecosystem
 ECOSYSTEM_APPS = ["hogwarts-trials", "pensieve", "burrow-clock"]
 
@@ -27,6 +33,12 @@ REQUIRED_PATHS = [
     os.path.join("apps", "pensieve"),
     os.path.join("apps", "burrow-clock"),
     os.path.join("packages", "commonroom-core"),
+    os.path.join("packages", "commonroom-core", "README.md"),
+    os.path.join("packages", "commonroom-core", "schemas", "README.md"),
+    os.path.join("packages", "commonroom-core", "schemas", "manifest.json"),
+    os.path.join("packages", "commonroom-core", "schemas", "v1", "house.schema.json"),
+    os.path.join("packages", "commonroom-core", "schemas", "v1", "user-reference.schema.json"),
+    os.path.join("packages", "commonroom-core", "schemas", "v1", "api-error.schema.json"),
     os.path.join("docs", "architecture.md"),
     os.path.join("docs", "technology-architecture.md"),
     os.path.join("docs", "product-vision.md"),
@@ -36,6 +48,7 @@ REQUIRED_PATHS = [
     os.path.join("docs", "adr", "0002-backend-and-api.md"),
     os.path.join("docs", "adr", "0003-data-and-retrieval.md"),
     os.path.join("docs", "adr", "0004-monorepo-and-shared-contracts.md"),
+    os.path.join("scripts", "validate_contract_schemas.py"),
 ]
 
 # Sensitive / forbidden filenames and patterns
@@ -200,6 +213,7 @@ def main() -> int:
         ("Forbidden / Secret Files", lambda: check_forbidden_files(repo_root)),
         ("Relative Markdown Links", lambda: check_markdown_links(repo_root)),
         ("Cross-Application Boundary Invariants", lambda: check_cross_app_boundaries(repo_root)),
+        ("Shared Contract Schemas", lambda: validate_contract_schemas(repo_root)),
     ]
 
     total_failures = 0
