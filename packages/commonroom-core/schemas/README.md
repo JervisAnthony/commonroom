@@ -44,3 +44,11 @@ To be accepted into `packages/commonroom-core/schemas/`:
 | **UserReference** | [`v1/user-reference.schema.json`](v1/user-reference.schema.json) | `urn:commonroom:schema:v1:user-reference` | Minimal cross-product user identity reference (`user_id` UUID and optional `display_name`). |
 | **ApiError** | [`v1/api-error.schema.json`](v1/api-error.schema.json) | `urn:commonroom:schema:v1:api-error` | Standard error response envelope with machine `code`, safe `message`, and optional `correlation_id` / `details`. |
 
+---
+
+## 5. Automated Validation & Scope
+
+- **Structural and Manifest Validation**: The automated validator [`scripts/validate_contract_schemas.py`](../../../scripts/validate_contract_schemas.py) performs repository-level structural checks, dialect header verification, path containment, and manifest-consistency validation without external dependencies.
+- **Validation Scope**: This script performs repository-level structural and manifest-integrity checks; it does not implement the complete JSON Schema specification or replace formal Draft 2020-12 meta-schema validation.
+- **Future Tooling**: Full semantic and meta-schema validation against the Draft 2020-12 specification may be integrated into project CI once workspace dependency tooling is established.
+

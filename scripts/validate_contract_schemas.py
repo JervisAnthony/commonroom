@@ -10,9 +10,10 @@ Import-safe: does not execute automatically when imported.
 """
 
 import json
+import ntpath
 import os
 import sys
-from typing import List, Dict, Any, Set
+from typing import List, Set
 
 APPROVED_DIALECT = "https://json-schema.org/draft/2020-12/schema"
 APPROVED_ID_PREFIX = "urn:commonroom:schema:v1:"
@@ -31,6 +32,7 @@ def validate_contract_schemas(repo_root: str) -> List[str]:
     """
     failures: List[str] = []
     schemas_dir = os.path.join(repo_root, "packages", "commonroom-core", "schemas")
+    schemas_dir_abs = os.path.abspath(schemas_dir)
     manifest_path = os.path.join(schemas_dir, "manifest.json")
 
     # 1. Check manifest exists and is valid JSON
@@ -104,9 +106,32 @@ def validate_contract_schemas(repo_root: str) -> List[str]:
             failures.append(f"Manifest entry '{name}' is missing a valid 'path'")
             continue
 
-        # Prevent path traversal
-        if ".." in rel_path.split("/") or ".." in rel_path.split("\\"):
-            failures.append(f"Manifest entry '{name}' path contains forbidden traversal: '{rel_path}'")
+        # 1. Enforce relative path structure (reject absolute, drive-qualified, or rooted paths across all platforms)
+        if (
+            os.path.isabs(rel_path)
+            or ntpath.isabs(rel_path)
+            or bool(ntpath.splitdrive(rel_path)[0])
+            or rel_path.startswith(("/", "\\"))
+        ):
+            failures.append(
+                f"Manifest entry '{name}' path must be a relative path: '{rel_path}'"
+            )
+            continue
+
+        # 2. Enforce strict containment within schemas root
+        full_schema_path = os.path.abspath(os.path.join(schemas_dir_abs, rel_path))
+        try:
+            common = os.path.commonpath([schemas_dir_abs, full_schema_path])
+            if common != schemas_dir_abs or full_schema_path == schemas_dir_abs:
+                failures.append(
+                    f"Manifest entry '{name}' path must resolve inside schema root: '{rel_path}'"
+                )
+                continue
+        except ValueError:
+            # Handles different drive letters on Windows
+            failures.append(
+                f"Manifest entry '{name}' path is on a different drive: '{rel_path}'"
+            )
             continue
 
         # Check for duplicates in manifest
@@ -126,7 +151,6 @@ def validate_contract_schemas(repo_root: str) -> List[str]:
         # Normalize relative path for disk check
         norm_rel_path = os.path.normpath(rel_path)
         manifest_referenced_relpaths.add(norm_rel_path)
-        full_schema_path = os.path.join(schemas_dir, norm_rel_path)
 
         if not os.path.exists(full_schema_path):
             failures.append(f"Manifest-listed schema file does not exist: {rel_path}")
@@ -204,7 +228,7 @@ def main() -> int:
     if not failures:
         print("[PASS] Shared Contract Schemas Integrity")
         print("-" * 60)
-        print("[SUCCESS] All shared contract schemas are valid and consistent.")
+        print("[SUCCESS] All shared contract schemas are structurally valid and manifest-consistent.")
         return 0
     else:
         print("[FAIL] Shared Contract Schemas Integrity")
