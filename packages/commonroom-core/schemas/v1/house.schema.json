@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:commonroom:schema:v1:house",
+  "title": "House",
+  "description": "Normalized machine-readable identifier for Hogwarts house affiliation.",
+  "type": "string",
+  "enum": [
+    "gryffindor",
+    "hufflepuff",
+    "ravenclaw",
+    "slytherin"
+  ]
+}
+

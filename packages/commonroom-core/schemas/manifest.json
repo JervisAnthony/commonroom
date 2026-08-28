@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "name": "commonroom-core-schemas",
+  "version": "1.0.0",
+  "dialect": "https://json-schema.org/draft/2020-12/schema",
+  "schemas": [
+    {
+      "name": "house",
+      "version": "1.0.0",
+      "id": "urn:commonroom:schema:v1:house",
+      "path": "v1/house.schema.json",
+      "title": "House",
+      "description": "Normalized machine-readable identifier for Hogwarts house affiliation."
+    },
+    {
+      "name": "user-reference",
+      "version": "1.0.0",
+      "id": "urn:commonroom:schema:v1:user-reference",
+      "path": "v1/user-reference.schema.json",
+      "title": "UserReference",
+      "description": "Minimal cross-product reference to a Commonroom user identity."
+    },
+    {
+      "name": "api-error",
+      "version": "1.0.0",
+      "id": "urn:commonroom:schema:v1:api-error",
+      "path": "v1/api-error.schema.json",
+      "title": "ApiError",
+      "description": "Standard error response envelope for Commonroom product APIs."
+    }
+  ]
+}
+
