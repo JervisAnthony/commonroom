@@ -44,11 +44,11 @@ We adopt a **TypeScript-first, React-aligned client architecture** tailored per 
 ## Alternatives Considered
 
 1. **Flutter**:
-   - *Rationale for Rejection*: While Flutter provides cross-platform mobile and web output from a single Dart codebase, it introduces a non-standard web rendering model (Canvas/WASM-based DOM) that impairs web accessibility, SEO, and document layout for lore reading in Pensieve and trivia in Hogwarts Trials. It also diverges from the TypeScript contract ecosystem.
+   - *Rationale for Non-Selection*: Flutter enables cross-platform development with a shared Dart codebase, but choosing it would introduce a separate language ecosystem alongside TypeScript web tooling. Standard DOM-oriented web architectures in Next.js offer better alignment with the text-heavy reading, semantic HTML, and accessibility needs of Hogwarts Trials and Pensieve.
 2. **Native iOS (Swift) & Android (Kotlin)**:
-   - *Rationale for Rejection*: Maintaining two separate native codebases for The Burrow Clock introduces excessive maintenance overhead and splits engineering effort for a community fan project.
+   - *Rationale for Non-Selection*: Maintaining two separate platform codebases for The Burrow Clock would require duplicate implementation effort and increase ongoing maintenance for the project.
 3. **Single Universal React Native Application (React Native Web for All Products)**:
-   - *Rationale for Rejection*: Forcing Hogwarts Trials and Pensieve into React Native Web imposes unnecessary UI/UX constraints on web layout, browser navigation, and rich document styling where Next.js provides a vastly superior web-native experience.
+   - *Rationale for Non-Selection*: Using React Native Web for Hogwarts Trials and Pensieve would add cross-platform abstractions where standard web primitives in Next.js provide a more direct fit for desktop and responsive web layouts.
 4. **Separate Unrelated Client Stacks (e.g., Vue, Svelte, Flutter)**:
-   - *Rationale for Rejection*: Fragmenting the frontend across different ecosystems would eliminate shared frontend tooling, prevent reusable TypeScript contracts, and increase developer cognitive overhead.
+   - *Rationale for Non-Selection*: Fragmenting the frontend across differing framework ecosystems would increase context-switching and prevent sharing TypeScript contract definitions and tooling.
 

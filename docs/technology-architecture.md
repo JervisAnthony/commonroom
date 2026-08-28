@@ -10,7 +10,7 @@ For specific architectural rationales and alternative analyses, see the linked [
 
 1. **Independent Product Deployability**: Each application (Hogwarts Trials, Pensieve, The Burrow Clock) operates with independent release cycles, decoupled runtime processes, and dedicated product datastores/schemas.
 2. **Type Safety Across Boundaries**: Strict end-to-end typing from database models and API schemas to frontend client components without manual cross-language duplication.
-3. **Ecosystem Suitability**: Align frontend stacks with modern React/TypeScript paradigms and backend stacks with Python's leading data, AI, and asynchronous web ecosystem.
+3. **Ecosystem Suitability**: Align frontend stacks with modern React/TypeScript paradigms and backend stacks with Python's rich data, AI, and asynchronous web ecosystem.
 4. **Minimal Operational Overhead**: Maintain architectural simplicity and zero vendor lock-in during foundational stages by utilizing a unified database technology (PostgreSQL + pgvector) and standard workspace tooling (pnpm, uv).
 5. **Rigid Privacy and Safety Enforcement**: Preserve privacy invariants in The Burrow Clock and provenance integrity in Pensieve through server-enforced authorization and strict credential boundaries.
 
@@ -152,7 +152,8 @@ graph TD
    - **PostgreSQL** is the standard relational database engine across all products.
    - Provides transactional integrity for house point ledgers, privacy consent records, and exam logs.
 2. **Vector Retrieval Baseline**:
-   - Pensieve uses **`pgvector`** for nearest-neighbor similarity search (HNSW indexing) over lore chunks and news articles.
+   - Pensieve uses **`pgvector`** for similarity search over lore chunks and news summaries.
+   - The specific indexing strategy (e.g., HNSW, IVFFlat, or exact search) will be evaluated and configured based on measured dataset characteristics and latency requirements during implementation.
    - Eliminates the need for a separate vector database cluster during initial stages.
 3. **Deferred Infrastructure**:
    - Standalone vector databases, distributed caching tiers (e.g., Redis), and document stores are deferred until empirical product scale necessitates them via future ADRs.
@@ -178,10 +179,10 @@ graph TD
 1. **Shared Ecosystem Persona**:
    - A single user identity (with consistent house affiliation and profile attributes) will eventually unify the three products.
 2. **Standards-Based Auth**:
-   - Authentication will follow standard **OAuth 2.0 / OpenID Connect (OIDC)** flows producing cryptographically verifiable JWTs.
+   - Authentication will follow standard **OAuth 2.0 / OpenID Connect (OIDC)** concepts and flows.
 3. **Independent Authorization**:
-   - Every product backend independently verifies tokens and validates permissions server-side.
-   - Backends must **never** trust client-asserted roles, permissions, or identity claims without cryptographic verification.
+   - Every product backend independently validates provider-issued tokens and claims according to the selected standards and provider metadata.
+   - Backends must **never** trust client-asserted roles, permissions, or identity claims without server-side cryptographic or token validation.
 4. **Deferred Provider Selection**:
    - Specific identity providers (e.g., Auth0, Clerk, self-hosted OIDC, etc.) are intentionally deferred to a future dedicated decision.
 

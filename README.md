@@ -70,9 +70,9 @@ For complete specifications, see [docs/technology-architecture.md](docs/technolo
 
 ## Project Status
 
-> **Stage: Commit 1 — Ecosystem Foundation**
+> **Stage: Technology Architecture Defined**
 >
-> The repository is currently in its initial architecture and foundation phase. Application logic, frameworks, databases, and UI components will be introduced in subsequent focused commits.
+> The repository has established its ecosystem architecture, governance rules, and technology decisions. Application scaffolding and implementation have not yet begun.
 
 ---
 

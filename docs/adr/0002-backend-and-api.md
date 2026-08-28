@@ -39,8 +39,8 @@ We establish an independent, service-oriented backend architecture based on **Py
 ## Consequences
 
 ### Positive
-- **Ecosystem Suitability**: Python provides unmatched native library support for AI, embeddings, natural language processing, vector retrieval, and data ingestion (essential for Pensieve).
-- **Type Safety & Validation**: Pydantic guarantees strict runtime validation and serialization for all incoming and outgoing payloads.
+- **Ecosystem Suitability**: Python offers extensive tooling and library support for AI workflows, vector embeddings, natural language processing, retrieval pipelines, and data ingestion (essential for Pensieve).
+- **Type Safety & Validation**: Pydantic provides runtime validation, parsing, serialization, and typed schema definitions for incoming and outgoing payloads.
 - **Automated Contract Generation**: OpenAPI schemas are generated natively from FastAPI endpoints, allowing automated client SDK/type generation.
 - **Independent Scaling & Deployment**: Products can be deployed, scaled, and maintained independently without coupling deployment cycles.
 
@@ -52,9 +52,9 @@ We establish an independent, service-oriented backend architecture based on **Py
 ## Alternatives Considered
 
 1. **Node.js / NestJS Universal Backend**:
-   - *Rationale for Rejection*: While Node.js would unify the language across frontend and backend, its ecosystem for AI orchestration, vector embeddings, scientific data processing, and document processing is significantly less mature and feature-complete than Python.
+   - *Rationale for Non-Selection*: A Node.js backend would allow a single programming language across frontend and backend. However, Python provides more direct alignment with the AI modeling, vector search, text processing, and data ingestion libraries required by Pensieve, making Python a more cohesive backend choice across the ecosystem.
 2. **Serverless-Only Functions (e.g., AWS Lambda / Cloud Functions)**:
-   - *Rationale for Rejection*: Pure serverless architectures introduce cold-start latency issues, complex persistent WebSocket connection state management for The Burrow Clock, and potential cloud vendor lock-in during early foundation stages.
+   - *Rationale for Non-Selection*: Pure serverless architectures introduce cold-start considerations, complex persistent WebSocket connection state management for The Burrow Clock, and potential cloud vendor coupling during early foundation stages.
 3. **Single Monolithic Commonroom Backend**:
-   - *Rationale for Rejection*: A single monolith violates product domain boundaries, couples release schedules, mixes trivia logic with AI retrieval and realtime presence, and prevents independent scaling.
+   - *Rationale for Non-Selection*: A single monolith violates product domain boundaries, couples release schedules, mixes trivia logic with AI retrieval and realtime presence, and prevents independent scaling.
 

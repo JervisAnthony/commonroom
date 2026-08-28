@@ -37,7 +37,7 @@ We establish **pnpm workspaces** for TypeScript/JavaScript, **uv** for Python, a
 ## Consequences
 
 ### Positive
-- **Deterministic Tooling**: `pnpm` and `uv` represent state-of-the-art package management in their respective language ecosystems.
+- **Deterministic Tooling**: `pnpm` and `uv` provide fast, deterministic package and environment management across their respective language ecosystems.
 - **Strict Boundary Enforcement**: pnpm's symlink model prevents phantom dependencies in frontend apps; neutral schemas in `commonroom-core` prevent frontend and backend contract drift.
 - **Minimal Cognitive Overhead**: Developers interact with native, familiar tooling (`pnpm`, `uv`) rather than learning bespoke orchestration layers.
 
@@ -48,10 +48,10 @@ We establish **pnpm workspaces** for TypeScript/JavaScript, **uv** for Python, a
 
 ## Alternatives Considered
 
-1. **npm / yarn**:
-   - *Rationale for Rejection*: Standard `npm` and `yarn` (classic) suffer from flat `node_modules` hoisting issues (phantom dependencies) and slower installation speeds compared to `pnpm`.
+1. **npm / yarn (classic)**:
+   - *Rationale for Non-Selection*: `pnpm` offers stronger isolation against phantom dependencies through its symlinked dependency layout and provides efficient disk usage across multiple workspace packages.
 2. **Poetry / pip-tools / pipenv**:
-   - *Rationale for Rejection*: `uv` provides orders-of-magnitude faster dependency resolution, native cross-platform lockfiles, and direct integration with Python 3.13+ without legacy configuration quirks.
+   - *Rationale for Non-Selection*: `uv` provides unified virtual environment creation, fast lockfile generation, and streamlined workspace management suited for Python 3.13+.
 3. **Turborepo / Nx / Bazel**:
-   - *Rationale for Rejection*: Introducing complex monorepo orchestrators adds significant configuration boilerplate and maintenance overhead before the codebase scale justifies distributed caching or task-graph pipelines.
+   - *Rationale for Non-Selection*: Monorepo build orchestrators introduce additional configuration and build abstractions that are not yet necessary for the current repository size.
 
