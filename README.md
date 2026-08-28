@@ -56,6 +56,18 @@ commonroom/
 
 ---
 
+## Technology Architecture
+
+Commonroom follows a modern, service-oriented monorepo architecture:
+- **Frontend Clients**: TypeScript with Next.js (web-first for Hogwarts Trials and Pensieve) and React Native / Expo (mobile-first for The Burrow Clock).
+- **Backend Services**: Python 3.13+ with FastAPI and Pydantic powering independent product APIs.
+- **Data & Semantic Retrieval**: PostgreSQL as the unified primary datastore, utilizing `pgvector` for Pensieve vector retrieval.
+- **Tooling & Contracts**: `pnpm` workspaces, `uv` for Python environments, and technology-neutral schema contracts in `packages/commonroom-core`.
+
+For complete specifications, see [docs/technology-architecture.md](docs/technology-architecture.md) and the [Architecture Decision Records (ADRs)](docs/adr/README.md).
+
+---
+
 ## Project Status
 
 > **Stage: Commit 1 — Ecosystem Foundation**
