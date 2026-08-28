@@ -52,15 +52,34 @@ jobs:
         with:
           python-version-file: ".python-version"
 
+      - name: Verify Python runtime line
+        run: |
+          PYTHON_VER=$(python --version)
+          echo "Discovered Python version: $PYTHON_VER"
+          case "$PYTHON_VER" in
+            "Python 3.13."*) ;;
+            *)
+              echo "Expected Python 3.13.x, got $PYTHON_VER"
+              exit 1
+              ;;
+          esac
+
       - name: Set up uv
-        uses: astral-sh/setup-uv@v9
+        uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: false
 
-      - name: Verify Python and uv versions
+      - name: Verify uv version constraint
         run: |
-          python --version
-          uv --version
+          UV_VER=$(uv --version)
+          echo "Discovered uv version: $UV_VER"
+          case "$UV_VER" in
+            "uv 0.12."*) ;;
+            *)
+              echo "Expected uv 0.12.x, got $UV_VER"
+              exit 1
+              ;;
+          esac
 
       - name: Verify uv workspace and lockfile
         run: uv lock --check
