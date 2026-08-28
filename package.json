@@ -1,0 +1,15 @@
+{
+  "name": "commonroom",
+  "private": true,
+  "packageManager": "pnpm@11.21.0",
+  "engines": {
+    "node": ">=24 <25",
+    "pnpm": ">=11 <12"
+  },
+  "scripts": {
+    "validate": "python scripts/validate_repository.py",
+    "validate:contracts": "python scripts/validate_contract_schemas.py",
+    "validate:toolchain": "python scripts/validate_toolchain.py"
+  }
+}
+

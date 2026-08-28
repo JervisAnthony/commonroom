@@ -19,12 +19,20 @@ if script_dir not in sys.path:
     sys.path.insert(0, script_dir)
 
 from validate_contract_schemas import validate_contract_schemas
+from validate_toolchain import validate_toolchain
 
 # Core apps recognized in the ecosystem
 ECOSYSTEM_APPS = ["hogwarts-trials", "pensieve", "burrow-clock"]
 
 # Required repository paths for the ecosystem foundation
 REQUIRED_PATHS = [
+    ".node-version",
+    ".python-version",
+    "package.json",
+    "pnpm-workspace.yaml",
+    "pnpm-lock.yaml",
+    "pyproject.toml",
+    "uv.lock",
     "AGENTS.md",
     "README.md",
     "CONTRIBUTING.md",
@@ -43,12 +51,15 @@ REQUIRED_PATHS = [
     os.path.join("docs", "technology-architecture.md"),
     os.path.join("docs", "product-vision.md"),
     os.path.join("docs", "ip-and-content-boundaries.md"),
+    os.path.join("docs", "development-toolchain.md"),
     os.path.join("docs", "adr", "README.md"),
     os.path.join("docs", "adr", "0001-client-platforms.md"),
     os.path.join("docs", "adr", "0002-backend-and-api.md"),
     os.path.join("docs", "adr", "0003-data-and-retrieval.md"),
     os.path.join("docs", "adr", "0004-monorepo-and-shared-contracts.md"),
     os.path.join("scripts", "validate_contract_schemas.py"),
+    os.path.join("scripts", "validate_toolchain.py"),
+    os.path.join(".github", "workflows", "toolchain-validation.yml"),
 ]
 
 # Sensitive / forbidden filenames and patterns
@@ -214,6 +225,7 @@ def main() -> int:
         ("Relative Markdown Links", lambda: check_markdown_links(repo_root)),
         ("Cross-Application Boundary Invariants", lambda: check_cross_app_boundaries(repo_root)),
         ("Shared Contract Schemas", lambda: validate_contract_schemas(repo_root)),
+        ("Toolchain Baseline", lambda: validate_toolchain(repo_root)),
     ]
 
     total_failures = 0

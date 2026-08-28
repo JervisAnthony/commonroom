@@ -53,3 +53,22 @@ To maintain stability, product boundaries, and code quality across the ecosystem
 12. **Zero copyrighted franchise assets**: Never introduce copyrighted book passages, movie scripts, ripped assets, official artwork, or proprietary franchise datasets. See [docs/ip-and-content-boundaries.md](docs/ip-and-content-boundaries.md).
 13. **Pass all validation before review**: Ensure the repository validator (`python scripts/validate_repository.py`) and all relevant tests pass before requesting review or marking a PR ready.
 
+---
+
+## 3. Development Toolchain & Local Validation
+
+The repository relies on standard, deterministic toolchain tooling:
+- **Runtimes**: Node.js `24.20.0` ([`.node-version`](.node-version)) and Python `3.13` ([`.python-version`](.python-version)).
+- **Package Managers**: `pnpm@11.21.0` for TypeScript/web workspaces and `uv >=0.12,<0.13` for Python workspaces.
+- **Lockfiles**: Both [`pnpm-lock.yaml`](pnpm-lock.yaml) and [`uv.lock`](uv.lock) are committed and verified with frozen lockfile checks.
+- **Validation Commands**:
+  ```bash
+  pnpm install --frozen-lockfile --ignore-scripts
+  uv lock --check
+  python scripts/validate_contract_schemas.py
+  python scripts/validate_toolchain.py
+  python scripts/validate_repository.py
+  ```
+
+For detailed setup instructions, see [docs/development-toolchain.md](docs/development-toolchain.md).
+
