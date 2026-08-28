@@ -70,9 +70,20 @@ For complete specifications, see [docs/technology-architecture.md](docs/technolo
 
 ## Project Status
 
-> **Stage: Technology Architecture Defined**
+> **Stage: Monorepo Toolchain Bootstrapped**
 >
-> The repository has established its ecosystem architecture, governance rules, and technology decisions. Application scaffolding and implementation have not yet begun.
+> The repository has established its ecosystem architecture, governance rules, shared contract layer, and executable monorepo toolchain. Application scaffolding and implementation have not yet begun.
+
+---
+
+## Development Toolchain
+
+The monorepo coordinates its workspaces using pinned runtimes and native package managers:
+- **Node.js**: `24.20.0` (LTS) via [`.node-version`](.node-version) with `pnpm@11.21.0` ([`package.json`](package.json)).
+- **Python**: `3.13` via [`.python-version`](.python-version) with `uv >=0.12,<0.13` ([`pyproject.toml`](pyproject.toml)).
+- **Lockfiles**: [`pnpm-lock.yaml`](pnpm-lock.yaml) and [`uv.lock`](uv.lock) ensure deterministic builds.
+
+For setup and verification workflows, see [docs/development-toolchain.md](docs/development-toolchain.md).
 
 ---
 

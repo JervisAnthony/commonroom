@@ -1,0 +1,72 @@
+name: Toolchain Validation
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  toolchain:
+    name: Toolchain & Lockfile Integrity
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: ".node-version"
+
+      - name: Verify Node runtime pin
+        run: |
+          NODE_VER=$(node --version)
+          echo "Discovered Node version: $NODE_VER"
+          if [ "$NODE_VER" != "v24.20.0" ]; then
+            echo "Expected Node v24.20.0, got $NODE_VER"
+            exit 1
+          fi
+
+      - name: Enable Corepack & Verify pnpm pin
+        run: |
+          corepack enable
+          PNPM_VER=$(pnpm --version)
+          echo "Discovered pnpm version: $PNPM_VER"
+          if [ "$PNPM_VER" != "11.21.0" ]; then
+            echo "Expected pnpm 11.21.0, got $PNPM_VER"
+            exit 1
+          fi
+
+      - name: Verify pnpm workspace and lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: ".python-version"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v9
+        with:
+          enable-cache: false
+
+      - name: Verify Python and uv versions
+        run: |
+          python --version
+          uv --version
+
+      - name: Verify uv workspace and lockfile
+        run: uv lock --check
+
+      - name: Run toolchain validation script
+        run: python scripts/validate_toolchain.py
+
+      - name: Verify working tree clean
+        run: git diff --exit-code
