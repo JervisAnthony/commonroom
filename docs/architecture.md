@@ -142,11 +142,8 @@ To maintain trust and accuracy across the ecosystem, all content systems must cl
 
 ---
 
-## 7. Technology Stack Considerations
+## 7. Technology Architecture & Decisions
 
-*(Non-binding considerations — framework and infrastructure scaffolding is deferred to subsequent commits)*
-
-- **Frontend / Clients**: Evaluation of cross-platform mobile frameworks (e.g., Flutter / React Native) for The Burrow Clock; web/mobile frameworks for Hogwarts Trials and Pensieve.
-- **Backend Services**: Modular backend services communicating via standardized REST/gRPC or message buses.
-- **Database & Storage**: Relational stores for structured relational data (identities, friendships, permissions) alongside dedicated vector/retrieval indices for Pensieve canonical search.
-
+The formal technology architecture for Commonroom has been established through Architecture Decision Records:
+- **Consolidated Architecture**: See [docs/technology-architecture.md](technology-architecture.md) for full stack specifications, data strategies, API paradigms, and deployment models.
+- **Architecture Decision Records**: See [docs/adr/](adr/README.md) for individual decision records covering client platforms, backend services, datastores/retrieval, and workspace tooling.

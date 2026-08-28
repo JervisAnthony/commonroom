@@ -28,8 +28,14 @@ REQUIRED_PATHS = [
     os.path.join("apps", "burrow-clock"),
     os.path.join("packages", "commonroom-core"),
     os.path.join("docs", "architecture.md"),
+    os.path.join("docs", "technology-architecture.md"),
     os.path.join("docs", "product-vision.md"),
     os.path.join("docs", "ip-and-content-boundaries.md"),
+    os.path.join("docs", "adr", "README.md"),
+    os.path.join("docs", "adr", "0001-client-platforms.md"),
+    os.path.join("docs", "adr", "0002-backend-and-api.md"),
+    os.path.join("docs", "adr", "0003-data-and-retrieval.md"),
+    os.path.join("docs", "adr", "0004-monorepo-and-shared-contracts.md"),
 ]
 
 # Sensitive / forbidden filenames and patterns
