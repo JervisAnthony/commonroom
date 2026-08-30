@@ -1,0 +1,77 @@
+name: Hogwarts Trials Web Validation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/hogwarts-trials/web/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "package.json"
+      - ".node-version"
+      - ".github/workflows/hogwarts-trials-web-validation.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "apps/hogwarts-trials/web/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "package.json"
+      - ".node-version"
+      - ".github/workflows/hogwarts-trials-web-validation.yml"
+
+permissions:
+  contents: read
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  validate:
+    name: Hogwarts Trials Web Integrity
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: ".node-version"
+
+      - name: Verify Node runtime pin
+        run: |
+          NODE_VER=$(node --version)
+          echo "Discovered Node version: $NODE_VER"
+          if [ "$NODE_VER" != "v24.20.0" ]; then
+            echo "Expected Node v24.20.0, got $NODE_VER"
+            exit 1
+          fi
+
+      - name: Enable Corepack & Verify pnpm pin
+        run: |
+          corepack enable
+          PNPM_VER=$(pnpm --version)
+          echo "Discovered pnpm version: $PNPM_VER"
+          if [ "$PNPM_VER" != "11.21.0" ]; then
+            echo "Expected pnpm 11.21.0, got $PNPM_VER"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Lint
+        run: pnpm --filter hogwarts-trials-web run lint
+
+      - name: Typecheck
+        run: pnpm --filter hogwarts-trials-web run typecheck
+
+      - name: Build
+        run: pnpm --filter hogwarts-trials-web run build
+
+      - name: Verify working tree clean
+        run: git diff --exit-code
