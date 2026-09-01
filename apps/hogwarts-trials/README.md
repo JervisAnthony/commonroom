@@ -5,8 +5,9 @@
 ## Applications
 
 - [Web Client](./web/README.md) - The Next.js frontend application (currently a scaffold).
+- [API Backend](./api/README.md) - The FastAPI backend service (currently a scaffold).
 
-*Note: The web scaffold exists at `web/`, but the API backend remains deferred. Quiz logic, sorting, and scoring are not yet implemented.*
+*Note: The frontend and API scaffolds exist, but product functionality remains under development. Quiz engine logic, sorting, scoring, authentication, and persistence/database are not yet implemented.*
 
 ## Product Scope & Boundaries
 - **Domain Responsibilities**: Quiz engine, question banks, quiz scoring, difficulty progression, sorting ceremony, house points earned via quiz activity, and competitive examinations (O.W.L.s / N.E.W.T.s).

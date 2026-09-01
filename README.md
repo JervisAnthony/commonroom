@@ -70,9 +70,9 @@ For complete specifications, see [docs/technology-architecture.md](docs/technolo
 
 ## Project Status
 
-> **Stage: Hogwarts Trials Web Scaffolded**
+> **Stage: Hogwarts Trials Web and API Scaffolded**
 >
-> The repository has established its ecosystem architecture, governance rules, shared contracts, and executable monorepo toolchain. The initial Hogwarts Trials web scaffold now exists, but backends and actual product functionality remain under development.
+> The repository has established its ecosystem architecture, governance rules, shared contracts, and executable monorepo toolchain. The initial Hogwarts Trials web and FastAPI backend scaffolds now exist, but actual product functionality remains under development.
 
 ---
 
