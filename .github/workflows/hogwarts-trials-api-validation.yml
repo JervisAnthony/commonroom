@@ -27,8 +27,6 @@ jobs:
   validate:
     name: Hogwarts Trials API Integrity
     runs-on: ubuntu-latest
-    env:
-      UV_PROJECT_ENVIRONMENT: ${{ runner.temp }}/commonroom-hogwarts-trials-api-venv
 
     steps:
       - name: Checkout repository
@@ -43,6 +41,9 @@ jobs:
         uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: false
+
+      - name: Configure external uv project environment
+        run: echo "UV_PROJECT_ENVIRONMENT=$RUNNER_TEMP/commonroom-hogwarts-trials-api-venv" >> "$GITHUB_ENV"
 
       - name: Verify uv version constraint
         run: |
