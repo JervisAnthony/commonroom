@@ -27,6 +27,8 @@ jobs:
   validate:
     name: Hogwarts Trials API Integrity
     runs-on: ubuntu-latest
+    env:
+      UV_PROJECT_ENVIRONMENT: ${{ runner.temp }}/commonroom-hogwarts-trials-api-venv
 
     steps:
       - name: Checkout repository
@@ -41,6 +43,18 @@ jobs:
         uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: false
+
+      - name: Verify uv version constraint
+        run: |
+          UV_VER=$(uv --version)
+          echo "Discovered uv version: $UV_VER"
+          case "$UV_VER" in
+            "uv 0.12."*) ;;
+            *)
+              echo "Expected uv 0.12.x, got $UV_VER"
+              exit 1
+              ;;
+          esac
 
       - name: Verify Python runtime pin
         run: |
