@@ -1,0 +1,67 @@
+name: Hogwarts Trials API Validation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/hogwarts-trials/api/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".python-version"
+      - ".github/workflows/hogwarts-trials-api-validation.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "apps/hogwarts-trials/api/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".python-version"
+      - ".github/workflows/hogwarts-trials-api-validation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Hogwarts Trials API Integrity
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: ".python-version"
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: false
+
+      - name: Verify Python runtime pin
+        run: |
+          PY_VER=$(python --version)
+          echo "Discovered Python version: $PY_VER"
+          if [[ "$PY_VER" != "Python 3.13."* ]]; then
+            echo "Expected Python 3.13.x, got $PY_VER"
+            exit 1
+          fi
+
+      - name: Validate lockfile integrity
+        run: uv lock --check
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run API Tests
+        run: uv run --project apps/hogwarts-trials/api pytest apps/hogwarts-trials/api/tests
+
+      - name: Run Repository Validation
+        run: python scripts/validate_repository.py
+
+      - name: Verify working tree clean
+        run: git diff --exit-code

@@ -76,7 +76,7 @@ python scripts/validate_repository.py
 
 ## 5. Current Implementation State
 
-> **Note**: Initial application scaffolding for the Hogwarts Trials web client has begun. Other applications (`apps/pensieve`, `apps/burrow-clock`) currently contain conceptual architecture documentation and do not contain runnable client or backend code.
+> **Note**: Initial application scaffolding for the Hogwarts Trials web client and FastAPI backend has begun. Other applications (`apps/pensieve`, `apps/burrow-clock`) currently contain conceptual architecture documentation and do not contain runnable client or backend code.
 
 ### Step 5: Hogwarts Trials Web Application
 
@@ -87,4 +87,13 @@ pnpm --filter hogwarts-trials-web dev
 pnpm --filter hogwarts-trials-web lint
 pnpm --filter hogwarts-trials-web typecheck
 pnpm --filter hogwarts-trials-web build
+```
+
+### Step 6: Hogwarts Trials API
+
+From the repository root:
+
+```bash
+uv run --project apps/hogwarts-trials/api pytest apps/hogwarts-trials/api/tests
+uv run --project apps/hogwarts-trials/api uvicorn hogwarts_trials_api.main:app --reload
 ```
