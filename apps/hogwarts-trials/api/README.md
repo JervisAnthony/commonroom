@@ -2,22 +2,32 @@
 
 **Purpose:** This service provides the backend logic for the Hogwarts Trials application within the Commonroom ecosystem.
 
-**Status:** This is an initial FastAPI infrastructure scaffold.
+**Status:** This is a FastAPI backend scaffold with product-local quiz domain contracts.
 
 ### Implementation Scope
 **Implemented:**
 - Minimal FastAPI application setup
 - Deterministic health endpoint (`/api/v1/health`)
-- Automated tests
+- Product-local quiz domain foundation (`Question`, `QuestionChoice`, `QuestionProvenance`, `Quiz`, `QuizQuestion`, `AnswerSubmission`)
+- Automated tests for health endpoint and quiz domain invariants
 
 **Deferred / Unimplemented:**
-- Quiz engine and question banks
-- Quiz sessions and scoring
+- Deterministic grading and scoring engine
+- Quiz HTTP endpoints and request routing
+- Question banks and real canon content
+- Quiz sessions, progression, and state management
 - Sorting Ceremony logic
 - House points and progression
 - Authentication and user accounts
 - Database connections and persistence (e.g., PostgreSQL)
 - AI / LLM integrations
+
+### Quiz Domain Foundation
+The API defines a typed, validated, and immutable domain model under `hogwarts_trials_api.domain`:
+- **Question and Quiz Structural Contracts**: Strictly validated questions supporting single-choice and multiple-choice types, bounded choices, and contiguous quiz question sequences.
+- **Provenance Metadata**: Categorization of canonical source tiers (`book_canon`, `screen_adaptation`, `official_expanded`) and curation lifecycles.
+- **Answer Submission Contract**: Structured submission models validating selection constraints.
+- **Validation-Only Phase**: This stage focuses purely on structural and invariant validation. Scoring/grading policies, REST exposure, persistence, and production question banks remain explicitly deferred.
 
 ### Requirements
 - Python >= 3.13
