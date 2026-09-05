@@ -1,13 +1,14 @@
-"""In-memory synthetic quiz catalog for Hogwarts Trials API.
+"""In-memory synthetic quiz repository for Hogwarts Trials API.
 
-Provides a minimal, deterministic, and immutable catalog of synthetic demonstration
-quizzes for API development, testing, and validation.
+Provides a concrete in-memory implementation of the QuizRepository protocol holding
+immutable synthetic demonstration quizzes for API development, testing, and validation.
 
-NOTE: This catalog contains synthetic, generic demonstration questions only. It does
+NOTE: This repository contains synthetic, generic demonstration questions only. It does
 NOT represent the production Hogwarts Trials question bank and contains no franchise
 trivia, canon text, or copyrighted material.
 """
 
+from collections.abc import Sequence
 from uuid import UUID
 
 from hogwarts_trials_api.domain.quiz import (
@@ -112,15 +113,21 @@ _DEMO_QUIZ = Quiz(
     ),
 )
 
-_CATALOG: tuple[Quiz, ...] = (_DEMO_QUIZ,)
-_CATALOG_BY_ID: dict[UUID, Quiz] = {quiz.quiz_id: quiz for quiz in _CATALOG}
 
+class InMemoryQuizRepository:
+    """In-memory quiz repository holding immutable synthetic demonstration quizzes."""
 
-def list_quizzes() -> tuple[Quiz, ...]:
-    """Return all available quizzes in deterministic catalog order."""
-    return _CATALOG
+    def __init__(self, quizzes: Sequence[Quiz] | None = None) -> None:
+        if quizzes is None:
+            self._quizzes: tuple[Quiz, ...] = (_DEMO_QUIZ,)
+        else:
+            self._quizzes = tuple(quizzes)
+        self._by_id: dict[UUID, Quiz] = {quiz.quiz_id: quiz for quiz in self._quizzes}
 
+    def list_quizzes(self) -> tuple[Quiz, ...]:
+        """Return all available quizzes in deterministic catalog order."""
+        return self._quizzes
 
-def get_quiz(quiz_id: UUID) -> Quiz | None:
-    """Retrieve a quiz by its unique identifier, or None if not found."""
-    return _CATALOG_BY_ID.get(quiz_id)
+    def get_quiz(self, quiz_id: UUID) -> Quiz | None:
+        """Retrieve a quiz by its unique identifier, or None if not found."""
+        return self._by_id.get(quiz_id)

@@ -6,8 +6,9 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi.testclient import TestClient
 
-from hogwarts_trials_api.application.quiz_catalog import (
+from hogwarts_trials_api.infrastructure.in_memory_quiz_repository import (
     DEMO_QUIZ_ID,
+    InMemoryQuizRepository,
     Q1_C1_ID,
     Q1_C2_ID,
     Q1_ID,
@@ -19,8 +20,6 @@ from hogwarts_trials_api.application.quiz_catalog import (
     Q3_C1_ID,
     Q3_C3_ID,
     Q3_ID,
-    get_quiz,
-    list_quizzes,
 )
 from hogwarts_trials_api.main import app
 
@@ -47,24 +46,27 @@ def assert_key_not_in_json(data: Any, forbidden_keys: set[str]) -> None:
 
 
 def test_catalog_fixed_ids_and_retrieval():
-    quizzes = list_quizzes()
+    repo = InMemoryQuizRepository()
+    quizzes = repo.list_quizzes()
     assert len(quizzes) >= 1
     demo = quizzes[0]
     assert demo.quiz_id == DEMO_QUIZ_ID
 
-    fetched = get_quiz(DEMO_QUIZ_ID)
+    fetched = repo.get_quiz(DEMO_QUIZ_ID)
     assert fetched is not None
     assert fetched.quiz_id == DEMO_QUIZ_ID
 
 
 def test_catalog_unknown_uuid_returns_none():
+    repo = InMemoryQuizRepository()
     unknown_id = uuid4()
-    assert get_quiz(unknown_id) is None
+    assert repo.get_quiz(unknown_id) is None
 
 
 def test_catalog_ordering_deterministic():
-    first_list = [q.quiz_id for q in list_quizzes()]
-    second_list = [q.quiz_id for q in list_quizzes()]
+    repo = InMemoryQuizRepository()
+    first_list = [q.quiz_id for q in repo.list_quizzes()]
+    second_list = [q.quiz_id for q in repo.list_quizzes()]
     assert first_list == second_list
 
 
@@ -464,3 +466,105 @@ def test_openapi_route_registration(client: TestClient):
     assert "/api/v1/quizzes/{quiz_id}/grade" in paths
     assert "post" in paths["/api/v1/quizzes/{quiz_id}/grade"]
     assert "/api/v1/health" in paths
+
+
+# ==============================================================================
+# Commit 11: Repository Dependency-Injection Boundary Test
+# ==============================================================================
+
+
+def test_api_uses_repository_dependency_override(client: TestClient):
+    """Verify that API endpoints consume QuizRepository via FastAPI dependency injection."""
+    from hogwarts_trials_api.api.dependencies import get_quiz_repository
+    from hogwarts_trials_api.domain.quiz import (
+        CurationStatus,
+        Question,
+        QuestionChoice,
+        QuestionDifficulty,
+        QuestionProvenance,
+        QuestionType,
+        Quiz,
+        QuizQuestion,
+        SourceTier,
+    )
+
+    alt_quiz_id = UUID("00000000-0000-4000-8000-000000000099")
+    alt_q_id = UUID("00000000-0000-4000-8000-000000000091")
+    alt_c1_id = UUID("00000000-0000-4000-8000-000000000092")
+    alt_c2_id = UUID("00000000-0000-4000-8000-000000000093")
+
+    alt_quiz = Quiz(
+        quiz_id=alt_quiz_id,
+        title="Alternate Injected Test Quiz",
+        description="A distinct quiz used solely to test dependency injection.",
+        questions=(
+            QuizQuestion(
+                position=1,
+                question=Question(
+                    question_id=alt_q_id,
+                    prompt="What is 10 + 10?",
+                    question_type=QuestionType.single_choice,
+                    difficulty=QuestionDifficulty.easy,
+                    choices=(
+                        QuestionChoice(choice_id=alt_c1_id, text="20"),
+                        QuestionChoice(choice_id=alt_c2_id, text="30"),
+                    ),
+                    correct_choice_ids=(alt_c1_id,),
+                    provenance=QuestionProvenance(
+                        source_tier=SourceTier.synthetic,
+                        source_reference="dependency-override-fixture",
+                        chapter_reference=None,
+                        curation_status=CurationStatus.approved,
+                    ),
+                    explanation="Ten plus ten is twenty.",
+                ),
+            ),
+        ),
+    )
+
+    alt_repo = InMemoryQuizRepository(quizzes=(alt_quiz,))
+
+    app.dependency_overrides[get_quiz_repository] = lambda: alt_repo
+    try:
+        # 1. Verify list endpoint returns overridden repository's quiz
+        list_resp = client.get("/api/v1/quizzes")
+        assert list_resp.status_code == 200
+        quizzes = list_resp.json()
+        assert len(quizzes) == 1
+        assert quizzes[0]["quiz_id"] == str(alt_quiz_id)
+        assert quizzes[0]["title"] == "Alternate Injected Test Quiz"
+
+        # 2. Verify detail endpoint retrieves from overridden repository
+        detail_resp = client.get(f"/api/v1/quizzes/{alt_quiz_id}")
+        assert detail_resp.status_code == 200
+        detail_data = detail_resp.json()
+        assert detail_data["quiz_id"] == str(alt_quiz_id)
+        assert detail_data["title"] == "Alternate Injected Test Quiz"
+        assert len(detail_data["questions"]) == 1
+
+        # 3. Verify grading endpoint grades against overridden repository
+        grade_resp = client.post(
+            f"/api/v1/quizzes/{alt_quiz_id}/grade",
+            json={
+                "submissions": [
+                    {
+                        "question_id": str(alt_q_id),
+                        "selected_choice_ids": [str(alt_c1_id)],
+                    }
+                ]
+            },
+        )
+        assert grade_resp.status_code == 200
+        assert grade_resp.json()["total_points"] == 1
+        assert grade_resp.json()["correct_count"] == 1
+
+        # 4. Verify default DEMO_QUIZ_ID is now 404 under overridden repo
+        old_resp = client.get(f"/api/v1/quizzes/{DEMO_QUIZ_ID}")
+        assert old_resp.status_code == 404
+    finally:
+        app.dependency_overrides.clear()
+
+    # Confirm restoration of default repository behavior
+    restored_resp = client.get("/api/v1/quizzes")
+    assert restored_resp.status_code == 200
+    assert any(q["quiz_id"] == str(DEMO_QUIZ_ID) for q in restored_resp.json())
