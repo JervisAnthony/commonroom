@@ -91,6 +91,7 @@ def test_enum_serialization_values():
     assert SourceTier.book_canon.value == "book_canon"
     assert SourceTier.screen_adaptation.value == "screen_adaptation"
     assert SourceTier.official_expanded.value == "official_expanded"
+    assert SourceTier.synthetic.value == "synthetic"
 
     assert CurationStatus.draft.value == "draft"
     assert CurationStatus.reviewed.value == "reviewed"
@@ -100,6 +101,28 @@ def test_enum_serialization_values():
 # ==============================================================================
 # 2-5. QUESTION PROVENANCE
 # ==============================================================================
+
+
+def test_source_tier_synthetic_exists_and_accepted_by_provenance():
+    """Verify SourceTier.synthetic exists, serializes to 'synthetic', and is accepted by QuestionProvenance."""
+    assert hasattr(SourceTier, "synthetic")
+    assert SourceTier.synthetic == "synthetic"
+    assert SourceTier.synthetic.value == "synthetic"
+
+    # Verify existing SourceTier values remain unchanged
+    assert SourceTier.book_canon.value == "book_canon"
+    assert SourceTier.screen_adaptation.value == "screen_adaptation"
+    assert SourceTier.official_expanded.value == "official_expanded"
+
+    # Verify QuestionProvenance accepts SourceTier.synthetic
+    prov = QuestionProvenance(
+        source_tier=SourceTier.synthetic,
+        source_reference="synthetic-test-fixture",
+        chapter_reference=None,
+        curation_status=CurationStatus.approved,
+    )
+    assert prov.source_tier == SourceTier.synthetic
+    assert prov.source_reference == "synthetic-test-fixture"
 
 
 def test_valid_provenance():

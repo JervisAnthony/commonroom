@@ -27,11 +27,19 @@ class QuestionDifficulty(StrEnum):
 
 
 class SourceTier(StrEnum):
-    """Canonical provenance classification for curated questions."""
+    """Canonical provenance classification for curated questions and synthetic fixtures.
+
+    Values:
+        book_canon: Authentic canonical literature content.
+        screen_adaptation: Screen/film adaptation material.
+        official_expanded: Officially licensed expanded franchise material.
+        synthetic: Original synthetic development/test/demo material rather than canonical production content.
+    """
 
     book_canon = "book_canon"
     screen_adaptation = "screen_adaptation"
     official_expanded = "official_expanded"
+    synthetic = "synthetic"
 
 
 class CurationStatus(StrEnum):
