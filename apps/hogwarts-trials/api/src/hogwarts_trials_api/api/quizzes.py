@@ -4,10 +4,12 @@ Exposes stateless endpoints to list quizzes, fetch playable quiz definitions,
 and grade submitted answers without leaking server-owned answer keys.
 """
 
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
+from hogwarts_trials_api.api.dependencies import get_quiz_repository
 from hogwarts_trials_api.api.schemas import (
     QuestionGradeResponse,
     QuizChoiceResponse,
@@ -17,7 +19,7 @@ from hogwarts_trials_api.api.schemas import (
     QuizQuestionResponse,
     QuizSummaryResponse,
 )
-from hogwarts_trials_api.application.quiz_catalog import get_quiz, list_quizzes
+from hogwarts_trials_api.application.quiz_repository import QuizRepository
 from hogwarts_trials_api.domain.grading import QuizGradingError, grade_quiz
 
 router = APIRouter(
@@ -25,11 +27,15 @@ router = APIRouter(
     tags=["quizzes"],
 )
 
+QuizRepoDep = Annotated[QuizRepository, Depends(get_quiz_repository)]
+
 
 @router.get("", response_model=list[QuizSummaryResponse])
-def get_quizzes() -> list[QuizSummaryResponse]:
+def get_quizzes(
+    repo: QuizRepoDep,
+) -> list[QuizSummaryResponse]:
     """Retrieve all available quizzes as summary items for discovery."""
-    quizzes = list_quizzes()
+    quizzes = repo.list_quizzes()
     return [
         QuizSummaryResponse(
             quiz_id=q.quiz_id,
@@ -42,13 +48,16 @@ def get_quizzes() -> list[QuizSummaryResponse]:
 
 
 @router.get("/{quiz_id}", response_model=QuizDetailResponse)
-def get_quiz_by_id(quiz_id: UUID) -> QuizDetailResponse:
+def get_quiz_by_id(
+    quiz_id: UUID,
+    repo: QuizRepoDep,
+) -> QuizDetailResponse:
     """Retrieve a playable quiz definition.
 
     Server-owned answer keys, correct choices, explanations, and editorial
     provenance are omitted.
     """
-    quiz = get_quiz(quiz_id)
+    quiz = repo.get_quiz(quiz_id)
     if quiz is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -83,13 +92,14 @@ def get_quiz_by_id(quiz_id: UUID) -> QuizDetailResponse:
 def grade_quiz_endpoint(
     quiz_id: UUID,
     request: QuizGradeRequest,
+    repo: QuizRepoDep,
 ) -> QuizGradeResponse:
     """Perform stateless evaluation of submitted answers against a quiz.
 
     Grading delegates to the deterministic domain engine. Answer keys are strictly
     omitted from the response.
     """
-    quiz = get_quiz(quiz_id)
+    quiz = repo.get_quiz(quiz_id)
     if quiz is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

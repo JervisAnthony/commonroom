@@ -2,7 +2,7 @@
 
 **Purpose:** This service provides the backend logic for the Hogwarts Trials application within the Commonroom ecosystem.
 
-**Status:** This is a FastAPI backend scaffold with product-local quiz domain contracts, a deterministic grading engine, and a stateless quiz REST API.
+**Status:** This is a FastAPI backend scaffold with product-local quiz domain contracts, a deterministic grading engine, a QuizRepository application port with an in-memory implementation, and a stateless quiz REST API.
 
 ### Implementation Scope
 **Implemented:**
@@ -10,9 +10,11 @@
 - Deterministic health endpoint (`/api/v1/health`)
 - Product-local quiz domain foundation (`Question`, `QuestionChoice`, `QuestionProvenance`, `Quiz`, `QuizQuestion`, `AnswerSubmission`)
 - Deterministic pure-domain grading engine (`grade_question`, `grade_quiz`, `QuestionResult`, `QuizResult`, `QuizGradingError`)
-- Synthetic in-memory demonstration quiz catalog (`hogwarts_trials_api.application.quiz_catalog`)
+- Application repository port (`QuizRepository` protocol in `hogwarts_trials_api.application.quiz_repository`)
+- Concrete in-memory synthetic demonstration quiz repository (`hogwarts_trials_api.infrastructure.in_memory_quiz_repository`)
+- FastAPI dependency provider for repository injection (`hogwarts_trials_api.api.dependencies`)
 - Public wire DTOs strictly preventing answer key and provenance leakage (`hogwarts_trials_api.api.schemas`)
-- Stateless quiz REST API (`hogwarts_trials_api.api.quizzes`):
+- Stateless quiz REST API consuming repository port (`hogwarts_trials_api.api.quizzes`):
   - `GET /api/v1/quizzes`: List available quizzes as summary items
   - `GET /api/v1/quizzes/{quiz_id}`: Retrieve a playable quiz definition
   - `POST /api/v1/quizzes/{quiz_id}/grade`: Evaluate submitted answers statelessly
@@ -20,7 +22,7 @@
 - Unanswered-question handling (omitted submissions evaluated as unanswered with 0 points)
 - One-point-per-question base scoring policy
 - Immutable `QuestionResult` and `QuizResult` models with consistency validation
-- Automated tests for health endpoint, quiz domain invariants, grading engine, and quiz REST API
+- Automated tests for health endpoint, quiz domain invariants, grading engine, repository abstraction, and quiz REST API
 
 **Deferred / Unimplemented:**
 - Question banks and production canon content (synthetic demonstration fixtures only)
@@ -46,13 +48,15 @@ The API defines typed, validated, and immutable domain contracts under `hogwarts
   - **Immutable Result Models**: `QuestionResult` and `QuizResult` enforce internal consistency across total points, max points, and status counts.
 
 ### Quiz REST API & Security Invariants
-The REST API under `hogwarts_trials_api.api` connects the application catalog and domain grading engine to HTTP clients:
+The REST API under `hogwarts_trials_api.api` connects the application repository port (`QuizRepository`) and domain grading engine to HTTP clients:
+- **Repository Seam**: Endpoints consume the `QuizRepository` application port via FastAPI dependency injection (`get_quiz_repository`). The current implementation is `InMemoryQuizRepository`, establishing a clean seam for future persistent storage without rewriting routes or domain contracts.
+- **Persistence Deferred**: Real database persistence remains explicitly deferred; PostgreSQL is still the intended persistence baseline.
 - `GET /api/v1/quizzes`: Returns a list of `QuizSummaryResponse` objects (`quiz_id`, `title`, `description`, `question_count`).
 - `GET /api/v1/quizzes/{quiz_id}`: Returns a playable `QuizDetailResponse`. Questions and choices are exposed without `correct_choice_ids`, `explanation`, `provenance`, or curation metadata.
 - `POST /api/v1/quizzes/{quiz_id}/grade`: Accepts `QuizGradeRequest` containing zero or more `AnswerSubmission` records. Missing question submissions are treated as unanswered. Evaluates via `grade_quiz` and returns `QuizGradeResponse` indicating status (`correct`, `incorrect`, `unanswered`) and awarded points, while strictly omitting server-side answer keys.
 - **Answer-Key Secrecy**: The public API strictly guarantees that server-owned answer keys (`correct_choice_ids`) and editorial explanations are never returned to clients.
 - **Statelessness**: No attempt IDs, session records, or progress state are persisted. Each grade request is evaluated statelessly and deterministically.
-- **Synthetic Fixture Notice**: The in-memory catalog contains synthetic demonstration questions (e.g., basic math, shapes, prime numbers) to enable API testing and development without using copyrighted franchise material.
+- **Synthetic Fixture Notice**: The in-memory repository contains synthetic demonstration questions (e.g., basic math, shapes, prime numbers) to enable API testing and development without using copyrighted franchise material.
 - **Competitive Integrity Notice**: In the absence of authentication, attempt lifecycle tracking, rate limiting, and persistence, this stateless API is not yet suitable for secure competitive examination modes where clients could guess answers.
 
 ### Requirements
