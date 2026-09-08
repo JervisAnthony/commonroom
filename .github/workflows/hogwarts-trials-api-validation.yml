@@ -28,6 +28,21 @@ jobs:
     name: Hogwarts Trials API Integrity
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: hogwarts_trials_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -70,9 +85,16 @@ jobs:
         run: uv lock --check
 
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --frozen --all-packages
+
+      - name: Run Alembic database migrations
+        env:
+          HOGWARTS_TRIALS_DATABASE_URL: postgresql+psycopg://test_user:test_password@localhost:5432/hogwarts_trials_test
+        run: uv run --project apps/hogwarts-trials/api alembic -c apps/hogwarts-trials/api/alembic.ini upgrade head
 
       - name: Run API Tests
+        env:
+          HOGWARTS_TRIALS_TEST_DATABASE_URL: postgresql+psycopg://test_user:test_password@localhost:5432/hogwarts_trials_test
         run: uv run --project apps/hogwarts-trials/api pytest apps/hogwarts-trials/api/tests
 
       - name: Run Repository Validation

@@ -3,5 +3,11 @@
 from hogwarts_trials_api.infrastructure.in_memory_quiz_repository import (
     InMemoryQuizRepository,
 )
+from hogwarts_trials_api.infrastructure.postgres_quiz_repository import (
+    PostgresQuizRepository,
+)
 
-__all__ = ["InMemoryQuizRepository"]
+__all__ = [
+    "InMemoryQuizRepository",
+    "PostgresQuizRepository",
+]
