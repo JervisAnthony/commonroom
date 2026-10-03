@@ -8,7 +8,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from hogwarts_trials_api.domain.grading import QuestionResultStatus
+from hogwarts_trials_api.domain.attempt import AttemptStatus, QuizAttempt
+from hogwarts_trials_api.domain.grading import QuestionResultStatus, QuizResult
 from hogwarts_trials_api.domain.quiz import (
     AnswerSubmission,
     QuestionDifficulty,
@@ -117,3 +118,54 @@ class QuizGradeResponse(BaseModel):
     correct_count: int = Field(ge=0)
     incorrect_count: int = Field(ge=0)
     unanswered_count: int = Field(ge=0)
+
+
+class QuizAttemptResponse(BaseModel):
+    """Safe public representation of a server-owned quiz attempt."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+    )
+
+    attempt_id: UUID
+    quiz_id: UUID
+    status: AttemptStatus
+    result: QuizGradeResponse | None = None
+
+
+def quiz_result_to_response(result: QuizResult) -> QuizGradeResponse:
+    """Convert an evaluated domain QuizResult to a safe public QuizGradeResponse."""
+    return QuizGradeResponse(
+        quiz_id=result.quiz_id,
+        question_results=tuple(
+            QuestionGradeResponse(
+                question_id=qr.question_id,
+                status=qr.status,
+                selected_choice_ids=qr.selected_choice_ids,
+                awarded_points=qr.awarded_points,
+                max_points=qr.max_points,
+            )
+            for qr in result.question_results
+        ),
+        total_points=result.total_points,
+        max_points=result.max_points,
+        correct_count=result.correct_count,
+        incorrect_count=result.incorrect_count,
+        unanswered_count=result.unanswered_count,
+    )
+
+
+def quiz_attempt_to_response(attempt: QuizAttempt) -> QuizAttemptResponse:
+    """Convert a domain QuizAttempt to a safe public QuizAttemptResponse."""
+    grade_response = (
+        quiz_result_to_response(attempt.result)
+        if attempt.result is not None
+        else None
+    )
+    return QuizAttemptResponse(
+        attempt_id=attempt.attempt_id,
+        quiz_id=attempt.quiz_id,
+        status=attempt.status,
+        result=grade_response,
+    )

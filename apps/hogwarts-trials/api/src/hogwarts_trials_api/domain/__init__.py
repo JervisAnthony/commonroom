@@ -1,5 +1,15 @@
 """Domain layer package for Hogwarts Trials API."""
 
+from hogwarts_trials_api.domain.attempt import (
+    AttemptStatus,
+    QuizAttempt,
+    QuizAttemptAlreadyCompletedError,
+    QuizAttemptError,
+    QuizAttemptMismatchError,
+    QuizAttemptNotFoundError,
+    complete_attempt,
+    create_quiz_attempt,
+)
 from hogwarts_trials_api.domain.grading import (
     QuestionResult,
     QuestionResultStatus,
@@ -23,6 +33,7 @@ from hogwarts_trials_api.domain.quiz import (
 
 __all__ = [
     "AnswerSubmission",
+    "AttemptStatus",
     "CurationStatus",
     "Question",
     "QuestionChoice",
@@ -32,10 +43,17 @@ __all__ = [
     "QuestionResultStatus",
     "QuestionType",
     "Quiz",
+    "QuizAttempt",
+    "QuizAttemptAlreadyCompletedError",
+    "QuizAttemptError",
+    "QuizAttemptMismatchError",
+    "QuizAttemptNotFoundError",
     "QuizGradingError",
     "QuizQuestion",
     "QuizResult",
     "SourceTier",
+    "complete_attempt",
+    "create_quiz_attempt",
     "grade_question",
     "grade_quiz",
 ]

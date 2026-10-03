@@ -170,3 +170,105 @@ class QuestionCorrectChoiceModel(Base):
     question: Mapped["QuestionModel"] = relationship("QuestionModel", back_populates="correct_choices")
     choice: Mapped["QuestionChoiceModel"] = relationship("QuestionChoiceModel")
 
+
+class QuizAttemptModel(Base):
+    """Relational table representing a quiz attempt aggregate."""
+
+    __tablename__ = "quiz_attempts"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('in_progress', 'completed')",
+            name="ck_quiz_attempts_status",
+        ),
+        Index("ix_quiz_attempts_quiz_id", "quiz_id"),
+    )
+
+    attempt_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    quiz_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("quizzes.quiz_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+
+    # Relationships
+    quiz: Mapped["QuizModel"] = relationship("QuizModel")
+    question_results: Mapped[list["QuizAttemptQuestionResultModel"]] = relationship(
+        "QuizAttemptQuestionResultModel",
+        back_populates="attempt",
+        cascade="all, delete-orphan",
+    )
+    selected_choices: Mapped[list["QuizAttemptSelectedChoiceModel"]] = relationship(
+        "QuizAttemptSelectedChoiceModel",
+        back_populates="attempt",
+        cascade="all, delete-orphan",
+    )
+
+
+class QuizAttemptQuestionResultModel(Base):
+    """Relational table snapshotting evaluated question outcomes for a completed attempt."""
+
+    __tablename__ = "quiz_attempt_question_results"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('correct', 'incorrect', 'unanswered')",
+            name="ck_quiz_attempt_question_results_status",
+        ),
+        Index("ix_quiz_attempt_question_results_question_id", "question_id"),
+    )
+
+    attempt_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("quiz_attempts.attempt_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    question_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("questions.question_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    awarded_points: Mapped[int] = mapped_column(Integer, nullable=False)
+    max_points: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # Relationships
+    attempt: Mapped["QuizAttemptModel"] = relationship(
+        "QuizAttemptModel", back_populates="question_results"
+    )
+    question: Mapped["QuestionModel"] = relationship("QuestionModel")
+
+
+class QuizAttemptSelectedChoiceModel(Base):
+    """Relational table snapshotting user-selected choices for an attempt's evaluated question."""
+
+    __tablename__ = "quiz_attempt_selected_choices"
+    __table_args__ = (
+        Index("ix_quiz_attempt_selected_choices_choice_id", "choice_id"),
+        Index(
+            "ix_quiz_attempt_selected_choices_attempt_question",
+            "attempt_id",
+            "question_id",
+        ),
+    )
+
+    attempt_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("quiz_attempts.attempt_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    question_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("questions.question_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    choice_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("question_choices.choice_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+    # Relationships
+    attempt: Mapped["QuizAttemptModel"] = relationship(
+        "QuizAttemptModel", back_populates="selected_choices"
+    )
+    choice: Mapped["QuestionChoiceModel"] = relationship("QuestionChoiceModel")

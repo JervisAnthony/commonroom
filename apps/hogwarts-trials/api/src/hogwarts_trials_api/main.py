@@ -1,10 +1,12 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+from hogwarts_trials_api.api.attempts import router as attempts_router
 from hogwarts_trials_api.api.quizzes import router as quizzes_router
 
 app = FastAPI(title="Hogwarts Trials API")
 app.include_router(quizzes_router)
+app.include_router(attempts_router)
 
 
 class HealthResponse(BaseModel):
