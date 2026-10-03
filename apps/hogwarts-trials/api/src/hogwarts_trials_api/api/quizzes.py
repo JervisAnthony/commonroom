@@ -9,17 +9,27 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from hogwarts_trials_api.api.dependencies import get_quiz_repository
+from hogwarts_trials_api.api.dependencies import (
+    get_quiz_attempt_repository,
+    get_quiz_repository,
+)
 from hogwarts_trials_api.api.schemas import (
     QuestionGradeResponse,
+    QuizAttemptResponse,
     QuizChoiceResponse,
     QuizDetailResponse,
     QuizGradeRequest,
     QuizGradeResponse,
     QuizQuestionResponse,
     QuizSummaryResponse,
+    quiz_attempt_to_response,
+    quiz_result_to_response,
+)
+from hogwarts_trials_api.application.quiz_attempt_repository import (
+    QuizAttemptRepository,
 )
 from hogwarts_trials_api.application.quiz_repository import QuizRepository
+from hogwarts_trials_api.domain.attempt import create_quiz_attempt
 from hogwarts_trials_api.domain.grading import QuizGradingError, grade_quiz
 
 router = APIRouter(
@@ -28,6 +38,9 @@ router = APIRouter(
 )
 
 QuizRepoDep = Annotated[QuizRepository, Depends(get_quiz_repository)]
+QuizAttemptRepoDep = Annotated[
+    QuizAttemptRepository, Depends(get_quiz_attempt_repository)
+]
 
 
 @router.get("", response_model=list[QuizSummaryResponse])
@@ -114,21 +127,31 @@ def grade_quiz_endpoint(
             detail=str(exc),
         ) from exc
 
-    return QuizGradeResponse(
-        quiz_id=domain_result.quiz_id,
-        question_results=tuple(
-            QuestionGradeResponse(
-                question_id=qr.question_id,
-                status=qr.status,
-                selected_choice_ids=qr.selected_choice_ids,
-                awarded_points=qr.awarded_points,
-                max_points=qr.max_points,
-            )
-            for qr in domain_result.question_results
-        ),
-        total_points=domain_result.total_points,
-        max_points=domain_result.max_points,
-        correct_count=domain_result.correct_count,
-        incorrect_count=domain_result.incorrect_count,
-        unanswered_count=domain_result.unanswered_count,
-    )
+    return quiz_result_to_response(domain_result)
+
+
+@router.post(
+    "/{quiz_id}/attempts",
+    status_code=status.HTTP_201_CREATED,
+    response_model=QuizAttemptResponse,
+)
+def start_quiz_attempt(
+    quiz_id: UUID,
+    quiz_repo: QuizRepoDep,
+    attempt_repo: QuizAttemptRepoDep,
+) -> QuizAttemptResponse:
+    """Start a new server-owned quiz attempt.
+
+    Verifies the quiz exists (404 if not found), generates an authoritative
+    server-side UUID v4 attempt ID, persists an in_progress attempt, and returns 201 Created.
+    """
+    quiz = quiz_repo.get_quiz(quiz_id)
+    if quiz is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Quiz not found",
+        )
+
+    attempt = create_quiz_attempt(quiz_id=quiz.quiz_id)
+    persisted = attempt_repo.create_attempt(attempt)
+    return quiz_attempt_to_response(persisted)
