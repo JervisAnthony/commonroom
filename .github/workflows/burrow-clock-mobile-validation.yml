@@ -1,0 +1,101 @@
+name: Burrow Clock Mobile Validation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/burrow-clock/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "package.json"
+      - ".node-version"
+      - "scripts/validate_*.py"
+      - "scripts/tests/test_validate_repository.py"
+      - ".github/workflows/burrow-clock-mobile-validation.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "apps/burrow-clock/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "package.json"
+      - ".node-version"
+      - "scripts/validate_*.py"
+      - "scripts/tests/test_validate_repository.py"
+      - ".github/workflows/burrow-clock-mobile-validation.yml"
+
+permissions:
+  contents: read
+
+env:
+  EXPO_NO_TELEMETRY: "1"
+  EXPO_OFFLINE: "1"
+
+jobs:
+  validate:
+    name: Burrow Clock Mobile Integrity
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: ".node-version"
+
+      - name: Verify Node runtime pin
+        run: |
+          NODE_VER=$(node --version)
+          EXPECTED_NODE_VER="v$(cat .node-version)"
+          if [ "$NODE_VER" != "$EXPECTED_NODE_VER" ]; then
+            echo "Expected Node $EXPECTED_NODE_VER, got $NODE_VER"
+            exit 1
+          fi
+
+      - name: Enable Corepack and verify pnpm pin
+        run: |
+          corepack enable
+          EXPECTED_PNPM_VER=$(node -p "require('./package.json').packageManager.split('@')[1]")
+          PNPM_VER=$(pnpm --version)
+          if [ "$PNPM_VER" != "$EXPECTED_PNPM_VER" ]; then
+            echo "Expected pnpm $EXPECTED_PNPM_VER, got $PNPM_VER"
+            exit 1
+          fi
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: ".python-version"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Typecheck
+        run: pnpm --filter burrow-clock-mobile run typecheck
+
+      - name: Lint
+        run: pnpm --filter burrow-clock-mobile run lint
+
+      - name: Validate Expo configuration
+        run: pnpm --filter burrow-clock-mobile run config:check
+
+      - name: Check SDK dependency compatibility
+        run: pnpm --filter burrow-clock-mobile run check:dependencies
+
+      - name: Bundle iOS and Android
+        run: pnpm --filter burrow-clock-mobile run bundle:check
+
+      - name: Validate repository
+        run: python scripts/validate_repository.py
+
+      - name: Test repository traversal
+        run: python -m unittest discover -s scripts/tests -p test_validate_repository.py
+
+      - name: Verify working tree clean
+        run: |
+          git diff --exit-code
+          test -z "$(git ls-files --others --exclude-standard)"

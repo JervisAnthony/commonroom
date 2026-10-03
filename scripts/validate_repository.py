@@ -24,6 +24,9 @@ from validate_toolchain import validate_toolchain
 # Core apps recognized in the ecosystem
 ECOSYSTEM_APPS = ["hogwarts-trials", "pensieve", "burrow-clock"]
 
+# Generated dependency and development state is not repository source.
+IGNORED_DIRECTORIES = {".git", "node_modules", ".expo"}
+
 # Required repository paths for the ecosystem foundation
 REQUIRED_PATHS = [
     ".node-version",
@@ -104,9 +107,7 @@ def check_forbidden_files(repo_root: str) -> List[str]:
     """Ensure no forbidden secret, key, or local env files exist in the repository."""
     failures = []
     for dirpath, dirnames, filenames in os.walk(repo_root):
-        # Skip git directory
-        if ".git" in dirpath.split(os.sep):
-            continue
+        dirnames[:] = [name for name in dirnames if name not in IGNORED_DIRECTORIES]
 
         for fname in filenames:
             rel_path = os.path.relpath(os.path.join(dirpath, fname), repo_root)
@@ -133,8 +134,7 @@ def check_markdown_links(repo_root: str) -> List[str]:
     link_pattern = re.compile(r"\[([^\]]*)\]\(([^)]+)\)")
 
     for dirpath, dirnames, filenames in os.walk(repo_root):
-        if ".git" in dirpath.split(os.sep):
-            continue
+        dirnames[:] = [name for name in dirnames if name not in IGNORED_DIRECTORIES]
 
         for fname in filenames:
             if not fname.endswith(".md"):
@@ -189,7 +189,8 @@ def check_cross_app_boundaries(repo_root: str) -> List[str]:
 
         other_apps = [a for a in ECOSYSTEM_APPS if a != app_name]
 
-        for dirpath, _, filenames in os.walk(app_path):
+        for dirpath, dirnames, filenames in os.walk(app_path):
+            dirnames[:] = [name for name in dirnames if name not in IGNORED_DIRECTORIES]
             for fname in filenames:
                 fpath = os.path.join(dirpath, fname)
                 rel_fpath = os.path.relpath(fpath, repo_root)
