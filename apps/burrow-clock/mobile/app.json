@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "The Burrow Clock",
+    "slug": "burrow-clock",
+    "version": "0.1.0",
+    "platforms": ["ios", "android"],
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "permissions": []
+    }
+  }
+}
