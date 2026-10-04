@@ -41,18 +41,56 @@ directory; it does not build or sign a native application.
 Expo's default Metro configuration supplies workspace support; no custom
 navigation, bundler configuration, or service layers are needed for this shell.
 
-### Deferred Functionality
+## Backend/API Foundation
 
-- Identity and authentication
-- Consent model and friend relationships
-- GPS permission handling and location collection
-- Geofencing and presence computation
-- Realtime synchronization and WebSockets
-- Backend/API
-- Maps and notifications
-- Background execution
+Commit 15 introduces the FastAPI backend/API shell under `api/`. The importable
+application is `burrow_clock_api.main:app`, titled **The Burrow Clock API**.
+`GET /api/v1/health` returns HTTP 200 with exactly:
+
+```json
+{"status": "ok", "service": "burrow-clock-api"}
+```
+
+The API imports without environment configuration, external infrastructure,
+network calls, or filesystem mutation. It has no database or privacy-sensitive
+functionality, and the mobile shell does not connect to it yet.
+
+Use Python 3.13.x from `.python-version` and uv 0.12.x. From the repository root,
+configure an external environment before syncing or running commands; do not
+create a repository-local `.venv`. For example, in PowerShell:
+
+```powershell
+$env:UV_PROJECT_ENVIRONMENT = Join-Path $env:TEMP 'commonroom-burrow-clock-api-venv'
+uv lock --check
+uv sync --frozen --all-packages
+uv run --frozen --project apps/burrow-clock/api pytest apps/burrow-clock/api/tests
+python scripts/validate_repository.py
+uv run --frozen --project apps/burrow-clock/api uvicorn burrow_clock_api.main:app --reload
+```
+
+On a POSIX shell, set the external environment with
+`export UV_PROJECT_ENVIRONMENT="${TMPDIR:-/tmp}/commonroom-burrow-clock-api-venv"`
+before running the same uv and Python commands. Uvicorn serves the health endpoint
+at `http://127.0.0.1:8000/api/v1/health` by default. The dedicated API CI workflow
+checks the toolchain, frozen workspace dependencies, health tests, repository
+integrity, and working tree cleanliness without service containers or secrets.
+
+## Deferred Functionality
+
+- Identity/authentication, authorization, and users/accounts
+- Friend relationships, consent domain model, and sharing permissions
 - Sharing sessions, revocation, and expiry
+- GPS permissions, foreground location collection, and background location collection
+- Raw coordinate persistence
+- Geofencing and presence computation
+- WebSockets and realtime presence
+- PostgreSQL/database persistence
+- Maps
+- Notifications
+- Emergency/SOS functionality
+- Background execution
 
-The privacy invariants above govern future implementations. The initial screen
-does not implement sharing or imply that any relationship or sharing session exists.
+The privacy invariants above govern future implementations. The mobile shell and
+API health endpoint do not implement sharing or imply that any relationship or
+sharing session exists.
 

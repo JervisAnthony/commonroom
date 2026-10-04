@@ -1,0 +1,87 @@
+name: Burrow Clock API Validation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/burrow-clock/api/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".python-version"
+      - "scripts/validate_*.py"
+      - ".github/workflows/burrow-clock-api-validation.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "apps/burrow-clock/api/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".python-version"
+      - "scripts/validate_*.py"
+      - ".github/workflows/burrow-clock-api-validation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Burrow Clock API Integrity
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: ".python-version"
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          version: "0.12.x"
+          enable-cache: false
+
+      - name: Configure external uv project environment
+        run: echo "UV_PROJECT_ENVIRONMENT=$RUNNER_TEMP/commonroom-burrow-clock-api-venv" >> "$GITHUB_ENV"
+
+      - name: Verify uv version constraint
+        run: |
+          UV_VER=$(uv --version)
+          echo "Discovered uv version: $UV_VER"
+          case "$UV_VER" in
+            "uv 0.12."*) ;;
+            *)
+              echo "Expected uv 0.12.x, got $UV_VER"
+              exit 1
+              ;;
+          esac
+
+      - name: Verify Python runtime pin
+        run: |
+          PY_VER=$(python --version)
+          echo "Discovered Python version: $PY_VER"
+          if [[ "$PY_VER" != "Python 3.13."* ]]; then
+            echo "Expected Python 3.13.x, got $PY_VER"
+            exit 1
+          fi
+
+      - name: Validate lockfile integrity
+        run: uv lock --check
+
+      - name: Install dependencies
+        run: uv sync --frozen --all-packages
+
+      - name: Run API tests
+        run: uv run --frozen --project apps/burrow-clock/api pytest apps/burrow-clock/api/tests
+
+      - name: Run repository validation
+        run: python scripts/validate_repository.py
+
+      - name: Verify working tree clean
+        run: |
+          git diff --exit-code
+          test -z "$(git status --porcelain)"
