@@ -75,16 +75,49 @@ at `http://127.0.0.1:8000/api/v1/health` by default. The dedicated API CI workfl
 checks the toolchain, frozen workspace dependencies, health tests, repository
 integrity, and working tree cleanliness without service containers or secrets.
 
+## Consent Domain Foundation
+
+Commit 16 introduces pure, standard-library Python consent rules in
+`api/src/burrow_clock_api/domain/consent.py`. Sharing is default-off: no explicit
+grant means no disclosure. `SharingScope` defines presence, approximate, and
+precise disclosure levels, in ascending sensitivity. An immutable `ConsentGrant`
+acts as a maximum disclosure ceiling: it permits its own level and lower levels,
+never a higher level. These scopes describe future permissions, not collected data.
+
+Grants contain only `scope`, `granted_at`, optional `expires_at`, and optional
+`revoked_at`. All timestamps, including explicitly supplied evaluation times,
+must be timezone-aware. Evaluation is deterministic and never reads the current
+clock. Comparisons use UTC instants, including across repeated local clock hours.
+Consent begins at `granted_at`; earlier evaluation is denied. Expiry must
+be strictly later than the grant and denies disclosure exactly at and after
+`expires_at`. Without expiry, a grant does not automatically expire.
+
+`revoke(at)` returns a new frozen grant without changing the original. Revocation
+cannot precede the grant; disclosure is denied exactly at and after `revoked_at`.
+Historical evaluation before revocation may still allow disclosure if otherwise
+active. Repeat revocation raises `ValueError`; no automatic re-grant exists.
+Invalid timestamps and scopes also raise `ValueError`.
+
+The model contains no users, friends, coordinates, persistence, or API surface.
+Expiry and revocation are executable domain semantics only: no scheduler,
+revocation API, persistence, or user workflow exists yet. The application endpoint
+remains `GET /api/v1/health` only. Run the focused deterministic tests with the
+external Python environment configured as above:
+
+```sh
+uv run --frozen --project apps/burrow-clock/api pytest apps/burrow-clock/api/tests/test_consent_domain.py
+```
+
 ## Deferred Functionality
 
 - Identity/authentication, authorization, and users/accounts
-- Friend relationships, consent domain model, and sharing permissions
-- Sharing sessions, revocation, and expiry
+- Friend relationships, attaching consent to specific people, and sharing permissions tied to relationships
+- Sharing sessions, revocation API/workflow, and expiry scheduling
 - GPS permissions, foreground location collection, and background location collection
-- Raw coordinate persistence
+- Coordinates and raw coordinate persistence
 - Geofencing and presence computation
 - WebSockets and realtime presence
-- PostgreSQL/database persistence
+- PostgreSQL/database persistence and migrations
 - Maps
 - Notifications
 - Emergency/SOS functionality
