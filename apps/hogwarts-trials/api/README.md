@@ -12,6 +12,7 @@
 - Deterministic pure-domain grading engine (`grade_question`, `grade_quiz`, `QuestionResult`, `QuizResult`, `QuizGradingError`)
 - Server-owned quiz attempt domain aggregate (`QuizAttempt`, `AttemptStatus`, `complete_attempt`, `create_quiz_attempt`, `QuizAttemptError`)
 - Application repository ports (`QuizRepository` and `QuizAttemptRepository` protocols)
+- Product-local immutable identity and attempt-ownership contracts with a pure default-deny policy (not wired into HTTP or persistence)
 - Concrete in-memory repositories for quizzes and attempts (`InMemoryQuizRepository`, `InMemoryQuizAttemptRepository`)
 - Concrete PostgreSQL relational repositories for quizzes and attempts (`PostgresQuizRepository`, `PostgresQuizAttemptRepository`)
 - SQLAlchemy 2.x relational persistence models for quizzes and attempts (`QuizModel`, `QuestionModel`, `QuizQuestionModel`, `QuestionChoiceModel`, `QuestionCorrectChoiceModel`, `QuizAttemptModel`, `QuizAttemptQuestionResultModel`, `QuizAttemptSelectedChoiceModel`)
@@ -42,19 +43,51 @@
 **Deferred / Unimplemented:**
 - Question banks and production canon content (synthetic demonstration fixtures only)
 - Repository write methods for quizzes (quiz authoring / editing remains deferred; quiz boundary is strictly read-only)
-- Authentication, user accounts, and identity (no users, tokens, or permissions)
-- User ownership of attempts (attempt IDs alone are NOT an authorization boundary)
+- User-account persistence, registration/login/logout, and token/session authentication
+- FastAPI current-principal dependency and authenticated attempt creation
+- Persistent ownership attachment to `QuizAttempt` and database ownership migration
+- Server-enforced ownership on GET and submit attempt (attempt IDs alone are NOT an authorization boundary)
 - Timers, deadlines, and expiration (attempts do not expire)
 - Incremental answer autosave, pause, or resume (attempts are strictly one-shot final submissions)
 - Attempt cancellation or retries on the same attempt (new attempt required for resubmission)
 - Persistent user score history
-- House points and progression (no house-point conversion)
+- House identity, house points, and progression (no house-point conversion)
 - Sorting Ceremony logic
 - Leaderboards and rankings
 - Rate limiting and cheating detection
 - AI / LLM integrations
 - Partial credit (none awarded)
 - Difficulty weighting (none applied; all questions are 1 base point)
+
+### Identity & Attempt Ownership Policy Boundary
+
+Commit 17 introduces product-local application contracts in
+`hogwarts_trials_api.application.identity` and
+`hogwarts_trials_api.application.attempt_authorization`, using only Python's
+standard library. Authentication and authorization are separate concerns:
+
+- `AuthenticatedPrincipal` contains only `user_id: UUID`. It represents identity
+  after future authentication; construction does not authenticate anyone.
+  Application code must receive it from a trusted authentication adapter/dependency,
+  never construct it from arbitrary client-controlled request data.
+- `AttemptOwnership` contains only `attempt_id: UUID` and `owner_user_id: UUID`,
+  representing one attempt owned by one user. Future trusted storage must supply
+  the ownership fact for the attempt being accessed.
+- Both contracts are frozen dataclasses. Non-UUID identifiers raise `TypeError`;
+  strings are never silently coerced into identity or ownership.
+- `can_access_attempt(ownership, principal)` allows access only when both contracts
+  are present and the principal's user ID matches the owner. Missing context,
+  mismatched owners, and bare UUIDs are denied. There is no default principal,
+  anonymous-owner fallback, role, or administrator bypass.
+- `require_attempt_owner(ownership, principal)` raises `AttemptAccessDeniedError`
+  on denial. The policy has no HTTP status codes or infrastructure dependencies.
+
+**Attempt UUIDs alone remain explicitly NOT an authorization boundary.** UUID
+entropy and possession of an attempt ID do not prove ownership. These contracts
+and policy are not wired into HTTP routes or persistence yet: current attempts
+remain unauthenticated and are not protected by ownership enforcement. No users,
+authentication mechanism, ownership columns, or public ownership metadata exist.
+`QuizAttempt`, repositories, database migrations, and endpoint behavior are unchanged.
 
 ### Quiz Domain & Grading Engine
 The API defines typed, validated, and immutable domain contracts under `hogwarts_trials_api.domain`:
