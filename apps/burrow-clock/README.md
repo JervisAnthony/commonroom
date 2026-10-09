@@ -53,7 +53,7 @@ application is `burrow_clock_api.main:app`, titled **The Burrow Clock API**.
 
 The API imports without environment configuration, external infrastructure,
 network calls, or filesystem mutation. It has no database or privacy-sensitive
-functionality, and the mobile shell does not connect to it yet.
+integration, and the mobile shell does not connect to it yet.
 
 Use Python 3.13.x from `.python-version` and uv 0.12.x. From the repository root,
 configure an external environment before syncing or running commands; do not
@@ -108,10 +108,58 @@ external Python environment configured as above:
 uv run --frozen --project apps/burrow-clock/api pytest apps/burrow-clock/api/tests/test_consent_domain.py
 ```
 
+## Relationship and Sharing Boundary
+
+Commit 18 adds immutable, product-local relationship and permission facts.
+`Friendship` contains only `friendship_id`, `user_a_id`, and `user_b_id`, all
+UUIDs, with distinct members. It represents a currently active relationship
+only. Participant order implies neither direction nor ownership; `contains_user`
+and `connects` inspect membership, with `connects` accepting either order.
+
+`SharingPermission` contains `friendship_id`, `sharer_user_id`,
+`recipient_user_id`, and the existing `ConsentGrant` as `grant`. Identifiers
+must be UUIDs and sharer and recipient must differ. It binds explicit consent
+to one friendship and direction: A -> B never implies B -> A. Reverse sharing
+requires an independent permission and grant. Invalid identifier/grant types
+raise `TypeError`; identical participants raise `ValueError`.
+
+`is_friend_disclosure_allowed(friendship, permission, sharer_user_id,
+recipient_user_id, requested_scope, at)` is a pure default-deny policy. It
+requires an active friendship with exactly the supplied parties and a permission
+matching that exact friendship, sharer, and recipient. Friendship alone never
+enables disclosure; consent or permission alone never enables disclosure.
+Malformed structural objects and mismatches deny. Scope, activation, expiry,
+and revocation remain delegated to `ConsentGrant` through
+`is_disclosure_allowed`; invalid evaluation scope/time retains its `ValueError`
+behavior when the relationship and permission match. Evaluation uses an
+explicit time, never the current clock.
+
+An absent active friendship denies even with a stale, otherwise active
+permission. Future trusted storage must return no active `Friendship` after
+removal, blocking, or unfriending, and authorization must retrieve both facts
+on every evaluation. Relationship lifecycle and actual block/unfriend workflows
+are not implemented; the policy does not mutate stale permissions.
+
+`FriendshipRepository.get_active_friendship_between(user_a_id, user_b_id)`
+looks up an active relationship independently of member order.
+`SharingPermissionRepository.get_permission(friendship_id, sharer_user_id,
+recipient_user_id)` looks up one exact direction. These runtime-checkable
+protocols in `application/repositories.py` are read-side trusted-storage
+boundaries only, with no mutation methods, repository adapters, or persistence.
+UUIDs do not establish identity or authentication. The API remains
+`GET /api/v1/health` only, and no location data exists.
+
+Run the focused deterministic suite using the configured external environment:
+
+```sh
+uv run --frozen --project apps/burrow-clock/api pytest apps/burrow-clock/api/tests/test_friend_sharing.py
+```
+
 ## Deferred Functionality
 
-- Identity/authentication, authorization, and users/accounts
-- Friend relationships, attaching consent to specific people, and sharing permissions tied to relationships
+- Authentication, authorization integration with authenticated principals, and users/accounts
+- Friendship invitations/requests and accept/reject/block/unfriend workflows
+- Repository adapters and friendship/permission REST APIs
 - Sharing sessions, revocation API/workflow, and expiry scheduling
 - GPS permissions, foreground location collection, and background location collection
 - Coordinates and raw coordinate persistence
@@ -124,6 +172,6 @@ uv run --frozen --project apps/burrow-clock/api pytest apps/burrow-clock/api/tes
 - Background execution
 
 The privacy invariants above govern future implementations. The mobile shell and
-API health endpoint do not implement sharing or imply that any relationship or
-sharing session exists.
+API health endpoint do not collect or disclose location data. The pure domain
+facts and policy do not implement sharing sessions or authenticated sharing.
 
