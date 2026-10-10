@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:commonroom:schema:v1:user-id",
+  "title": "UserId",
+  "description": "Canonical minimal cross-product user identifier, represented as a UUID-formatted string at serialized boundaries. An identifier only: not proof of authentication or authorization, not a token, and not a credential.",
+  "type": "string",
+  "format": "uuid"
+}

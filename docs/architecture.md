@@ -5,7 +5,7 @@
 **Commonroom** uses a monorepo structure to house multiple independent products alongside shared core contracts. 
 
 ### Why a Monorepo?
-- **Unified Domain Contracts**: Shared data contracts (e.g., identity, house affiliation, privacy primitives) evolve synchronously without cross-repo dependency drift.
+- **Unified Domain Contracts**: Shared data contracts (e.g., minimal identity and house affiliation) evolve synchronously without cross-repo dependency drift.
 - **Independent Deployability**: Each application maintains distinct build and deployment pipelines; apps are decoupled runtime artifacts.
 - **Consistent Governance**: Shared linting, agent guidelines, security invariants, and content standards apply across the entire ecosystem.
 
@@ -63,9 +63,13 @@ graph TD
 | Location Sharing & Geofences | ❌ | ❌ | **OWNS** | ❌ |
 | Presence States & Ambient Family Clocks | ❌ | ❌ | **OWNS** | ❌ |
 | Granular Friend Sharing Permissions | ❌ | ❌ | **OWNS** | ❌ |
-| Shared Identity & Profile Contracts | Reads/Consumes | Reads/Consumes | Reads/Consumes | **OWNS (Contract)** |
-| Shared House Enum / Profile Schemas | Reads/Consumes | Reads/Consumes | Reads/Consumes | **OWNS (Contract)** |
-| Cross-App Privacy & Consent Primitives | Reads/Consumes | Reads/Consumes | Reads/Consumes | **OWNS (Contract)** |
+| Minimal User Identity (UserId / UserReference) | Local UUID representation | Deferred consumer | Local UUID representation | **OWNS (Neutral Contract)** |
+| Shared House Enum | Eligible consumer | Eligible consumer | Eligible consumer | **OWNS (Contract)** |
+| Generic Cross-App Privacy & Consent Contracts | Deferred | Deferred | Product-local consent | Deferred |
+
+This table describes contract ownership and permitted consumption, not runtime
+schema imports. JSON Schema is the neutral source of truth; generated language
+adapters and runtime consumption of the identity schemas remain future work.
 
 ### Specific Boundaries
 
@@ -89,16 +93,50 @@ graph TD
 
 ### Criteria for Inclusion in Core:
 1. **Multi-Consumer Requirement**: A concept must be actively required by at least two distinct applications.
-2. **Contract Stability**: Types and interfaces must represent stable domain boundaries (e.g., User ID, House identifier, generic permission state).
+2. **Contract Stability**: Types and interfaces must represent stable domain boundaries (e.g., User ID, House identifier). Speculative future consumers do not justify extraction.
 3. **No App-Specific Business Logic**: Scoring algorithms, LLM prompting chains, and geofence math belong in their respective apps, not in core.
 
-### Planned Shared Concepts (Documented Only — Not Implemented in Foundation Phase):
-- **User Identity Contracts**: Global user identifiers, account metadata interfaces.
-- **Wizarding Profile**: House affiliation, wand attributes, patronus representations.
-- **Friendship Contracts**: Shared relational graphs for cross-product interactions.
-- **Shared Achievement Contracts**: Cross-ecosystem badges and milestones.
-- **Notification Contracts**: Event structures for dispatching ecosystem alerts.
-- **Privacy & Permission Primitives**: Baseline consent models, scoping flags, and access tokens.
+### Implemented Neutral Contracts
+
+- **UserId**: The canonical minimal UUID-formatted user identifier, justified by
+  active UUID use in Hogwarts Trials principals/attempt ownership and Burrow
+  Clock friendship/sharing parties.
+- **UserReference**: The existing user-facing envelope with required UUID
+  `user_id` and optional `display_name`, with unchanged v1 behavior.
+- **House** and **ApiError**: Existing neutral affiliation and error contracts.
+
+Identity minimization is shared. Possessing or presenting a UUID does not
+authenticate a user or authorize access; UUID entropy is not authorization.
+Display names and profile metadata are presentation-only, never security
+credentials or authentication/authorization keys. Each backend remains
+responsible for trusted authentication and product authorization. Core defines
+no global current-user state, roles, permission logic, or product business logic.
+
+### Product-Local Security and Privacy Semantics
+
+The Burrow Clock owns `SharingScope` (PRESENCE / APPROXIMATE / PRECISE),
+`ConsentGrant`, `Friendship`, `SharingPermission`, `is_disclosure_allowed`, and
+`is_friend_disclosure_allowed`. Its disclosure levels and relationship-sharing
+rules are product-specific, and only Burrow Clock currently requires this exact
+consent model.
+
+Hogwarts Trials owns `AuthenticatedPrincipal`, `AttemptOwnership`,
+`can_access_attempt`, `require_attempt_owner`, and `AttemptAccessDeniedError`.
+A trusted application principal is not a neutral serialized identity schema;
+resource ownership is not friendship or consent. These concepts are deliberately
+not flattened into generic Permission, Consent, Principal, or Access contracts.
+No authentication implementation or authorization logic is added to core.
+
+### Deferred Shared Concepts and Integration
+
+- Authentication provider integration and authenticated-principal integration.
+- Product authorization integration; authorization rules remain product-local.
+- Account metadata and additional wizarding profile contracts.
+- Friendship graphs as shared ecosystem contracts and generic privacy/consent
+  contracts, pending concrete multi-product need.
+- Shared achievements and notifications.
+- Generated Python/TypeScript adapters; current product UUID dataclasses do not
+  import or execute the core identity JSON Schemas at runtime.
 
 ---
 
