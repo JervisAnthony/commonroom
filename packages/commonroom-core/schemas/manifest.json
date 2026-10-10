@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "name": "commonroom-core-schemas",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "dialect": "https://json-schema.org/draft/2020-12/schema",
   "schemas": [
     {
@@ -11,6 +11,14 @@
       "path": "v1/house.schema.json",
       "title": "House",
       "description": "Normalized machine-readable identifier for Hogwarts house affiliation."
+    },
+    {
+      "name": "user-id",
+      "version": "1.0.0",
+      "id": "urn:commonroom:schema:v1:user-id",
+      "path": "v1/user-id.schema.json",
+      "title": "UserId",
+      "description": "Canonical minimal cross-product user identifier, represented as a UUID-formatted string at serialized boundaries. An identifier only: not proof of authentication or authorization, not a token, and not a credential."
     },
     {
       "name": "user-reference",
