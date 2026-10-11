@@ -34,11 +34,14 @@ from fastapi.testclient import TestClient
 import pytest
 
 from hogwarts_trials_api.api.dependencies import (
+    get_current_principal,
     get_quiz_attempt_repository,
     get_quiz_repository,
     reset_quiz_attempt_repository,
     reset_quiz_repository,
 )
+from hogwarts_trials_api.application.attempt_authorization import AttemptOwnership
+from hogwarts_trials_api.application.identity import AuthenticatedPrincipal
 from hogwarts_trials_api.application.quiz_attempt_repository import (
     QuizAttemptRepository,
 )
@@ -66,7 +69,10 @@ from hogwarts_trials_api.infrastructure.in_memory_quiz_repository import (
 )
 from hogwarts_trials_api.main import app
 
+TEST_PRINCIPAL = AuthenticatedPrincipal(UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"))
+
 SENSITIVE_FIELD_NAMES = (
+    "user_id", "owner_user_id", "ownership", "token",
     "correct_choice_ids",
     "explanation",
     "provenance",
@@ -93,7 +99,9 @@ def clean_repositories():
     """Ensure clean repository state before and after each test."""
     reset_quiz_repository()
     reset_quiz_attempt_repository()
+    app.dependency_overrides[get_current_principal] = lambda: TEST_PRINCIPAL
     yield
+    app.dependency_overrides.clear()
     reset_quiz_repository()
     reset_quiz_attempt_repository()
 
@@ -364,9 +372,13 @@ def test_dependency_provider_override(client):
         def __init__(self):
             self.calls = []
 
-        def create_attempt(self, attempt: QuizAttempt) -> QuizAttempt:
+        def create_attempt(self, attempt: QuizAttempt, ownership: AttemptOwnership) -> QuizAttempt:
             self.calls.append(("create_attempt", attempt.attempt_id))
             return attempt
+
+        def get_attempt_ownership(self, attempt_id: UUID) -> AttemptOwnership | None:
+            self.calls.append(("get_attempt_ownership", attempt_id))
+            return None
 
         def get_attempt(self, attempt_id: UUID) -> QuizAttempt | None:
             self.calls.append(("get_attempt", attempt_id))
@@ -386,10 +398,144 @@ def test_dependency_provider_override(client):
         assert len(mock_repo.calls) == 1
         assert mock_repo.calls[0][0] == "create_attempt"
 
-        # 2. Get attempt invokes mock_repo.get_attempt
+        # 2. Missing ownership denies GET without loading the full attempt
         get_res = client.get(f"/api/v1/attempts/{uuid4()}")
         assert get_res.status_code == 404
         assert len(mock_repo.calls) == 2
-        assert mock_repo.calls[1][0] == "get_attempt"
+        assert mock_repo.calls[1][0] == "get_attempt_ownership"
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.mark.parametrize("credentials", [
+    {},
+    {"headers": {"X-User-Id": str(TEST_PRINCIPAL.user_id)}},
+    {"headers": {"X-Commonroom-User-Id": str(TEST_PRINCIPAL.user_id)}},
+    {"headers": {"Authorization": f"Bearer {TEST_PRINCIPAL.user_id}"}},
+    {"params": {"user_id": str(TEST_PRINCIPAL.user_id)}},
+    {"cookies": {"user_id": str(TEST_PRINCIPAL.user_id)}},
+])
+def test_default_principal_denies_before_repository_access(client, credentials):
+    app.dependency_overrides.pop(get_current_principal)
+
+    def forbidden_repository():
+        pytest.fail("Unauthenticated request reached a repository dependency")
+
+    app.dependency_overrides[get_quiz_repository] = forbidden_repository
+    app.dependency_overrides[get_quiz_attempt_repository] = forbidden_repository
+    for method, path in [
+        ("post", f"/api/v1/quizzes/{DEMO_QUIZ_ID}/attempts"),
+        ("get", f"/api/v1/attempts/{uuid4()}"),
+        ("post", f"/api/v1/attempts/{uuid4()}/submit"),
+    ]:
+        kwargs = dict(credentials)
+        cookies = kwargs.pop("cookies", {})
+        client.cookies.update(cookies)
+        if method == "post":
+            kwargs["json"] = {"submissions": [], "user_id": str(TEST_PRINCIPAL.user_id)}
+        response = client.request(method, path, **kwargs)
+        assert response.status_code == 401
+        assert response.json() == {"detail": "Authentication required"}
+
+
+def test_public_quiz_routes_remain_public(client):
+    app.dependency_overrides.pop(get_current_principal)
+    assert client.get("/api/v1/quizzes").status_code == 200
+    assert client.get(f"/api/v1/quizzes/{DEMO_QUIZ_ID}").status_code == 200
+    response = client.post(f"/api/v1/quizzes/{DEMO_QUIZ_ID}/grade", json={"submissions": []})
+    assert response.status_code == 200
+    assert_no_sensitive_fields(response.json())
+
+
+def test_creation_uses_only_trusted_owner(client):
+    fake_owner = uuid4()
+    response = client.post(
+        f"/api/v1/quizzes/{DEMO_QUIZ_ID}/attempts",
+        json={"owner_user_id": str(fake_owner), "user_id": str(fake_owner)},
+        params={"user_id": str(fake_owner)},
+        headers={"X-User-Id": str(fake_owner)},
+    )
+    assert response.status_code == 201
+    attempt_id = UUID(response.json()["attempt_id"])
+    assert get_quiz_attempt_repository().get_attempt_ownership(attempt_id) == AttemptOwnership(
+        attempt_id, TEST_PRINCIPAL.user_id
+    )
+    assert_no_sensitive_fields(response.json())
+
+
+@pytest.mark.parametrize("completed", [False, True])
+def test_cross_user_isolation_and_no_mutation(client, completed):
+    attempt_a = client.post(f"/api/v1/quizzes/{DEMO_QUIZ_ID}/attempts").json()["attempt_id"]
+    if completed:
+        assert client.post(f"/api/v1/attempts/{attempt_a}/submit", json={"submissions": []}).status_code == 200
+    before = get_quiz_attempt_repository().get_attempt(UUID(attempt_a))
+    other = AuthenticatedPrincipal(UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"))
+    app.dependency_overrides[get_current_principal] = lambda: other
+    attempt_b = client.post(f"/api/v1/quizzes/{DEMO_QUIZ_ID}/attempts").json()["attempt_id"]
+    for attempt_id in [attempt_a, str(uuid4())]:
+        for response in [
+            client.get(f"/api/v1/attempts/{attempt_id}"),
+            client.post(f"/api/v1/attempts/{attempt_id}/submit", json={"submissions": []}),
+        ]:
+            assert response.status_code == 404
+            assert response.json() == {"detail": "Attempt not found"}
+    assert get_quiz_attempt_repository().get_attempt(UUID(attempt_a)) == before
+    assert client.get(f"/api/v1/attempts/{attempt_b}").status_code == 200
+    app.dependency_overrides[get_current_principal] = lambda: TEST_PRINCIPAL
+    assert client.get(f"/api/v1/attempts/{attempt_a}").status_code == 200
+    assert client.get(f"/api/v1/attempts/{attempt_b}").status_code == 404
+
+
+@pytest.mark.parametrize("fact", ["missing", "non_owner", "wrong_attempt", "malformed", "invalid_uuid"])
+@pytest.mark.parametrize("operation", ["get", "submit"])
+def test_denial_never_reads_full_attempt(client, fact, operation):
+    requested = uuid4()
+    ownership = {
+        "missing": None,
+        "non_owner": AttemptOwnership(requested, uuid4()),
+        "wrong_attempt": AttemptOwnership(uuid4(), TEST_PRINCIPAL.user_id),
+        "malformed": {"attempt_id": requested, "owner_user_id": TEST_PRINCIPAL.user_id},
+        "invalid_uuid": AttemptOwnership(requested, TEST_PRINCIPAL.user_id),
+    }[fact]
+    if fact == "invalid_uuid":
+        object.__setattr__(ownership, "owner_user_id", "invalid")
+
+    class RecordingRepo:
+        def __init__(self):
+            self.calls = []
+
+        def get_attempt_ownership(self, attempt_id):
+            self.calls.append(("ownership", attempt_id))
+            return ownership
+
+        def get_attempt(self, attempt_id):
+            pytest.fail("Authorization denial crossed the attempt-data boundary")
+
+        def complete_attempt(self, attempt):
+            pytest.fail("Unauthorized submission mutated an attempt")
+
+    repo = RecordingRepo()
+    app.dependency_overrides[get_quiz_attempt_repository] = lambda: repo
+    path = f"/api/v1/attempts/{requested}"
+    response = client.get(path) if operation == "get" else client.post(path + "/submit", json={"submissions": []})
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Attempt not found"}
+    assert repo.calls == [("ownership", requested)]
+
+
+def test_owner_authorization_precedes_full_read(client):
+    requested = uuid4()
+    calls = []
+
+    class RecordingRepo:
+        def get_attempt_ownership(self, attempt_id):
+            calls.append(("ownership", attempt_id))
+            return AttemptOwnership(attempt_id, TEST_PRINCIPAL.user_id)
+
+        def get_attempt(self, attempt_id):
+            calls.append(("attempt", attempt_id))
+            return QuizAttempt(attempt_id=attempt_id, quiz_id=DEMO_QUIZ_ID, status=AttemptStatus.in_progress)
+
+    app.dependency_overrides[get_quiz_attempt_repository] = lambda: RecordingRepo()
+    assert client.get(f"/api/v1/attempts/{requested}").status_code == 200
+    assert calls == [("ownership", requested), ("attempt", requested)]

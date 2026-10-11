@@ -205,6 +205,17 @@ class QuizAttemptModel(Base):
     )
 
 
+class QuizAttemptOwnershipModel(Base):
+    """Separate immutable owner fact; legacy attempts may have no row."""
+
+    __tablename__ = "quiz_attempt_ownerships"
+
+    attempt_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("quiz_attempts.attempt_id", ondelete="CASCADE"), primary_key=True
+    )
+    owner_user_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+
+
 class QuizAttemptQuestionResultModel(Base):
     """Relational table snapshotting evaluated question outcomes for a completed attempt."""
 

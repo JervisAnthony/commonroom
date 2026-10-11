@@ -9,6 +9,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload, sessionmaker
 
+from hogwarts_trials_api.application.attempt_authorization import AttemptOwnership
 from hogwarts_trials_api.application.quiz_attempt_repository import (
     QuizAttemptRepository,
 )
@@ -27,6 +28,7 @@ from hogwarts_trials_api.domain.grading import (
 from hogwarts_trials_api.infrastructure.models import (
     QuestionModel,
     QuizAttemptModel,
+    QuizAttemptOwnershipModel,
     QuizAttemptQuestionResultModel,
     QuizAttemptSelectedChoiceModel,
     QuizModel,
@@ -40,12 +42,22 @@ class PostgresQuizAttemptRepository:
     def __init__(self, session_factory: sessionmaker[Session]) -> None:
         self._session_factory = session_factory
 
-    def create_attempt(self, attempt: QuizAttempt) -> QuizAttempt:
-        """Persist a newly started in-progress attempt.
+    def create_attempt(
+        self, attempt: QuizAttempt, ownership: AttemptOwnership
+    ) -> QuizAttempt:
+        """Atomically persist a new attempt and its validated immutable owner fact.
 
         Raises:
             QuizAttemptError: If an attempt with this ID already exists.
         """
+        if (
+            not isinstance(ownership, AttemptOwnership)
+            or not isinstance(ownership.attempt_id, UUID)
+            or not isinstance(ownership.owner_user_id, UUID)
+            or ownership.attempt_id != attempt.attempt_id
+        ):
+            raise QuizAttemptError("Ownership must be valid and match the attempt ID")
+
         with self._session_factory() as session:
             with session.begin():
                 existing = session.get(QuizAttemptModel, attempt.attempt_id)
@@ -59,7 +71,24 @@ class PostgresQuizAttemptRepository:
                     status=attempt.status.value,
                 )
                 session.add(model)
+                # Flush the parent first: there is no ORM ownership relationship.
+                # Both inserts still belong to this transaction and roll back together.
+                session.flush()
+                session.add(
+                    QuizAttemptOwnershipModel(
+                        attempt_id=ownership.attempt_id,
+                        owner_user_id=ownership.owner_user_id,
+                    )
+                )
         return attempt
+
+    def get_attempt_ownership(self, attempt_id: UUID) -> AttemptOwnership | None:
+        """Query only the ownership row, without loading the attempt aggregate."""
+        with self._session_factory() as session:
+            model = session.get(QuizAttemptOwnershipModel, attempt_id)
+            if model is None:
+                return None
+            return AttemptOwnership(model.attempt_id, model.owner_user_id)
 
     def get_attempt(self, attempt_id: UUID) -> QuizAttempt | None:
         """Retrieve an attempt by its ID, reconstructing its evaluated snapshot if completed."""

@@ -16,12 +16,18 @@
 - Deterministic base grading/scoring engine
 - First quiz REST surface (quiz discovery, playable quiz detail, stateless grading)
 - Synthetic API demonstration catalog
+- Quiz and attempt repository ports with in-memory and PostgreSQL persistence
+- Alembic migrations and one-shot attempt lifecycle with persisted result snapshots
+- Separate immutable attempt ownership, enforced before GET/submit reads
+- Fail-closed trusted-principal dependency: stateful attempt routes default to 401; authenticated non-owners and legacy unowned attempts receive generic 404
+- Public quiz discovery/detail/stateless grading; public attempt DTOs omit owner identity
 
 **Still Deferred:**
-- Persistence/database
 - Real curated question bank
-- Authentication
-- Quiz attempt/session lifecycle
+- Actual OAuth/OIDC provider integration and token validation
+- Users/accounts persistence, registration/login/logout, and frontend authentication
+- Account/profile management, roles/admin authorization, and attempt history by user
+- Persistent user score history
 - Sorting ceremony
 - House points
 - Leaderboards

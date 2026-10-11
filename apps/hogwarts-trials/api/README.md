@@ -2,7 +2,7 @@
 
 **Purpose:** This service provides the backend logic for the Hogwarts Trials application within the Commonroom ecosystem.
 
-**Status:** This is a FastAPI backend scaffold with product-local quiz domain contracts, a deterministic grading engine, a `QuizRepository` application port with in-memory and PostgreSQL adapters, Alembic database migrations, and a stateless quiz REST API.
+**Status:** This is a FastAPI backend scaffold with product-local quiz domain contracts, a deterministic grading engine, a `QuizRepository` application port with in-memory and PostgreSQL adapters, Alembic database migrations, a public stateless quiz REST API, and a protected persistent quiz-attempt lifecycle.
 
 ### Implementation Scope
 **Implemented:**
@@ -12,14 +12,15 @@
 - Deterministic pure-domain grading engine (`grade_question`, `grade_quiz`, `QuestionResult`, `QuizResult`, `QuizGradingError`)
 - Server-owned quiz attempt domain aggregate (`QuizAttempt`, `AttemptStatus`, `complete_attempt`, `create_quiz_attempt`, `QuizAttemptError`)
 - Application repository ports (`QuizRepository` and `QuizAttemptRepository` protocols)
-- Product-local immutable identity and attempt-ownership contracts with a pure default-deny policy (not wired into HTTP or persistence)
+- Product-local immutable identity and attempt-ownership contracts with a pure default-deny policy enforced by HTTP and persistence
 - Concrete in-memory repositories for quizzes and attempts (`InMemoryQuizRepository`, `InMemoryQuizAttemptRepository`)
 - Concrete PostgreSQL relational repositories for quizzes and attempts (`PostgresQuizRepository`, `PostgresQuizAttemptRepository`)
-- SQLAlchemy 2.x relational persistence models for quizzes and attempts (`QuizModel`, `QuestionModel`, `QuizQuestionModel`, `QuestionChoiceModel`, `QuestionCorrectChoiceModel`, `QuizAttemptModel`, `QuizAttemptQuestionResultModel`, `QuizAttemptSelectedChoiceModel`)
+- SQLAlchemy 2.x relational persistence models for quizzes and attempts (`QuizModel`, `QuestionModel`, `QuizQuestionModel`, `QuestionChoiceModel`, `QuestionCorrectChoiceModel`, `QuizAttemptModel`, `QuizAttemptOwnershipModel`, `QuizAttemptQuestionResultModel`, `QuizAttemptSelectedChoiceModel`)
 - Explicit domain <-> persistence mappers and snapshot reconstruction
 - Alembic database migrations:
   - Revision `0001`: Relational quiz schema
   - Revision `0002`: Relational attempt lifecycle schema
+  - Revision `0003`: Separate immutable attempt ownership facts (no legacy backfill)
 - Configurable repository backend selection via environment variables (`memory` vs `postgres`, defaulting to `memory`)
 - FastAPI dependency providers for repository injection (`get_quiz_repository`, `get_quiz_attempt_repository`)
 - Public wire DTOs strictly preventing answer key and provenance leakage (`QuizAttemptResponse`, `QuizGradeResponse`, `QuizDetailResponse`)
@@ -44,9 +45,9 @@
 - Question banks and production canon content (synthetic demonstration fixtures only)
 - Repository write methods for quizzes (quiz authoring / editing remains deferred; quiz boundary is strictly read-only)
 - User-account persistence, registration/login/logout, and token/session authentication
-- FastAPI current-principal dependency and authenticated attempt creation
-- Persistent ownership attachment to `QuizAttempt` and database ownership migration
-- Server-enforced ownership on GET and submit attempt (attempt IDs alone are NOT an authorization boundary)
+- Actual OAuth/OIDC provider integration and cryptographic provider token validation
+- Frontend authentication, account/profile management, and roles/admin authorization
+- Attempt listing/history by user
 - Timers, deadlines, and expiration (attempts do not expire)
 - Incremental answer autosave, pause, or resume (attempts are strictly one-shot final submissions)
 - Attempt cancellation or retries on the same attempt (new attempt required for resubmission)
@@ -61,18 +62,18 @@
 
 ### Identity & Attempt Ownership Policy Boundary
 
-Commit 17 introduces product-local application contracts in
+Product-local application contracts live in
 `hogwarts_trials_api.application.identity` and
 `hogwarts_trials_api.application.attempt_authorization`, using only Python's
 standard library. Authentication and authorization are separate concerns:
 
 - `AuthenticatedPrincipal` contains only `user_id: UUID`. It represents identity
-  after future authentication; construction does not authenticate anyone.
+  after trusted authentication; construction does not authenticate anyone.
   Application code must receive it from a trusted authentication adapter/dependency,
   never construct it from arbitrary client-controlled request data.
 - `AttemptOwnership` contains only `attempt_id: UUID` and `owner_user_id: UUID`,
-  representing one attempt owned by one user. Future trusted storage must supply
-  the ownership fact for the attempt being accessed.
+  representing one attempt owned by one user. Repositories persist and retrieve
+  the ownership fact separately from the identity-neutral `QuizAttempt` aggregate.
 - Both contracts are frozen dataclasses. Non-UUID identifiers raise `TypeError`;
   strings are never silently coerced into identity or ownership.
 - `can_access_attempt(ownership, principal)` allows access only when both contracts
@@ -82,12 +83,34 @@ standard library. Authentication and authorization are separate concerns:
 - `require_attempt_owner(ownership, principal)` raises `AttemptAccessDeniedError`
   on denial. The policy has no HTTP status codes or infrastructure dependencies.
 
-**Attempt UUIDs alone remain explicitly NOT an authorization boundary.** UUID
-entropy and possession of an attempt ID do not prove ownership. These contracts
-and policy are not wired into HTTP routes or persistence yet: current attempts
-remain unauthenticated and are not protected by ownership enforcement. No users,
-authentication mechanism, ownership columns, or public ownership metadata exist.
-`QuizAttempt`, repositories, database migrations, and endpoint behavior are unchanged.
+**Attempt UUID possession is not authorization.** The default
+`get_current_principal()` FastAPI dependency returns `401 Unauthorized` with
+`detail: "Authentication required"` until a trusted authentication adapter supplies
+an `AuthenticatedPrincipal`. No real OAuth/OIDC provider, credential validation,
+login, or client-UUID authentication is implemented. Test dependency overrides
+supply trusted principals without creating a production authentication shortcut.
+
+All three stateful attempt routes require this principal: creation, GET, and submit.
+Public quiz list, detail, and stateless grading remain accessible without a principal.
+Creation derives ownership only from `principal.user_id` and persists attempt and
+ownership atomically (one memory lock or one PostgreSQL transaction). Ownership is
+immutable; no transfer or administrator bypass exists.
+
+GET and submit first fetch ownership for the exact requested attempt ID, verify that
+the returned fact refers to that ID, and apply the product-local ownership policy.
+Only authorized callers reach full attempt retrieval. Authenticated non-owners,
+unknown attempts, invalid ownership facts, and legacy attempts without an ownership
+row receive the same `404 Not Found` with `detail: "Attempt not found"`. Unauthorized
+submissions do not mutate attempts. Legacy rows receive no fabricated owner.
+
+Revision `0003` adds only `quiz_attempt_ownerships`: `attempt_id UUID PRIMARY KEY
+NOT NULL` (FK to `quiz_attempts.attempt_id ON DELETE CASCADE`) and
+`owner_user_id UUID NOT NULL`. No user table or user foreign key exists.
+`QuizAttemptRepository.create_attempt(attempt, ownership)` validates the matching
+association; `get_attempt_ownership(attempt_id)` reads just the security fact.
+Completion preserves ownership. Public `QuizAttemptResponse` and
+`QuizGradeResponse` omit owner identity and ownership metadata as well as answer
+keys, explanations, and provenance.
 
 ### Quiz Domain & Grading Engine
 The API defines typed, validated, and immutable domain contracts under `hogwarts_trials_api.domain`:
@@ -148,7 +171,7 @@ The REST API under `hogwarts_trials_api.api` connects the application repository
 - `POST /api/v1/attempts/{attempt_id}/submit`: Submits final answers for an in-progress attempt exactly once. The attempt is graded via `complete_attempt` and marked `completed` in an atomic database transaction. Resubmitting a completed attempt returns `409 Conflict`.
 - **Persisted Result Snapshots**: Completed attempts persist evaluated question outcomes and selections so that subsequent `GET /api/v1/attempts/{attempt_id}` requests retrieve the snapshot without recalculating or re-grading.
 - **Answer-Key Secrecy**: The public API strictly guarantees that server-owned answer keys (`correct_choice_ids`) and editorial explanations are never returned to clients across all endpoints.
-- **Authorization & Security Boundary Notice**: Attempt identifiers are high-entropy UUID v4 values generated server-side. However, **attempt IDs alone are NOT an authorization boundary**. Until authentication and user accounts are introduced in future commits, possessing an attempt UUID is not equivalent to secure identity or ownership.
+- **Authorization & Security Boundary**: Stateful attempt routes require a trusted principal; GET and submit enforce exact-attempt ownership before reading state. Attempt UUID possession is not authorization. The default principal dependency denies all stateful requests with 401 pending a real authentication adapter.
 - **Synthetic Fixture Notice**: Demonstration questions (basic math, shapes, prime numbers) are synthetic placeholders enabling development without using copyrighted franchise material.
 
 ### Requirements

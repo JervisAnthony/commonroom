@@ -8,6 +8,10 @@ are configured at runtime and easily overridden during testing.
 from collections.abc import Mapping
 from typing import Any
 
+from fastapi import HTTPException, status
+
+from hogwarts_trials_api.application.identity import AuthenticatedPrincipal
+
 from hogwarts_trials_api.application.quiz_attempt_repository import (
     QuizAttemptRepository,
 )
@@ -30,6 +34,16 @@ from hogwarts_trials_api.infrastructure.postgres_quiz_attempt_repository import 
 from hogwarts_trials_api.infrastructure.postgres_quiz_repository import (
     PostgresQuizRepository,
 )
+
+def get_current_principal() -> AuthenticatedPrincipal:
+    """Fail closed until a trusted adapter validates credentials and supplies identity.
+
+    Request identifiers are never credentials. Tests may override this dependency.
+    """
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required"
+    )
+
 
 _quiz_repository: QuizRepository | None = None
 _quiz_attempt_repository: QuizAttemptRepository | None = None

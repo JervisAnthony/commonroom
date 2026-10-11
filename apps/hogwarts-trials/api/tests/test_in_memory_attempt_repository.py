@@ -20,6 +20,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from hogwarts_trials_api.application.attempt_authorization import AttemptOwnership
 from hogwarts_trials_api.application.quiz_attempt_repository import (
     QuizAttemptRepository,
 )
@@ -52,6 +53,8 @@ from hogwarts_trials_api.domain.quiz import (
 from hogwarts_trials_api.infrastructure.in_memory_quiz_attempt_repository import (
     InMemoryQuizAttemptRepository,
 )
+
+OWNER_ID = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 
 QUIZ_ID = UUID("11111111-1111-4000-8000-111111111111")
 Q1_ID = UUID("33333333-3333-4000-8000-333333333333")
@@ -96,7 +99,7 @@ def test_create_and_retrieve_attempt():
     repo = InMemoryQuizAttemptRepository()
     attempt = create_quiz_attempt(QUIZ_ID)
 
-    created = repo.create_attempt(attempt)
+    created = repo.create_attempt(attempt, AttemptOwnership(attempt.attempt_id, OWNER_ID))
     assert created == attempt
 
     retrieved = repo.get_attempt(attempt.attempt_id)
@@ -114,7 +117,7 @@ def test_get_unknown_attempt_returns_none():
 def test_duplicate_attempt_id_rejection():
     repo = InMemoryQuizAttemptRepository()
     attempt = create_quiz_attempt(QUIZ_ID)
-    repo.create_attempt(attempt)
+    repo.create_attempt(attempt, AttemptOwnership(attempt.attempt_id, OWNER_ID))
 
     duplicate = QuizAttempt(
         attempt_id=attempt.attempt_id,
@@ -122,7 +125,7 @@ def test_duplicate_attempt_id_rejection():
         status=AttemptStatus.in_progress,
     )
     with pytest.raises(QuizAttemptError, match="already exists"):
-        repo.create_attempt(duplicate)
+        repo.create_attempt(duplicate, AttemptOwnership(duplicate.attempt_id, OWNER_ID))
 
 
 def test_complete_unknown_attempt_raises():
@@ -139,7 +142,7 @@ def test_complete_attempt_and_retrieve():
     repo = InMemoryQuizAttemptRepository()
     quiz = build_synthetic_quiz()
     attempt = create_quiz_attempt(QUIZ_ID)
-    repo.create_attempt(attempt)
+    repo.create_attempt(attempt, AttemptOwnership(attempt.attempt_id, OWNER_ID))
 
     submissions = (
         AnswerSubmission(question_id=Q1_ID, selected_choice_ids=(C2_ID,)),
@@ -161,7 +164,7 @@ def test_complete_already_completed_attempt_raises():
     repo = InMemoryQuizAttemptRepository()
     quiz = build_synthetic_quiz()
     attempt = create_quiz_attempt(QUIZ_ID)
-    repo.create_attempt(attempt)
+    repo.create_attempt(attempt, AttemptOwnership(attempt.attempt_id, OWNER_ID))
 
     completed = complete_attempt(attempt=attempt, quiz=quiz, submissions=())
     repo.complete_attempt(completed)
@@ -173,7 +176,7 @@ def test_complete_already_completed_attempt_raises():
 def test_complete_attempt_requires_completed_status_and_result():
     repo = InMemoryQuizAttemptRepository()
     attempt = create_quiz_attempt(QUIZ_ID)
-    repo.create_attempt(attempt)
+    repo.create_attempt(attempt, AttemptOwnership(attempt.attempt_id, OWNER_ID))
 
     with pytest.raises(QuizAttemptError, match="Cannot complete attempt without completed status"):
         repo.complete_attempt(attempt)
@@ -183,7 +186,7 @@ def test_deterministic_result_preservation():
     repo = InMemoryQuizAttemptRepository()
     quiz = build_synthetic_quiz()
     attempt = create_quiz_attempt(QUIZ_ID)
-    repo.create_attempt(attempt)
+    repo.create_attempt(attempt, AttemptOwnership(attempt.attempt_id, OWNER_ID))
 
     completed = complete_attempt(
         attempt=attempt,
@@ -200,7 +203,7 @@ def test_deterministic_result_preservation():
 def test_clear_utility():
     repo = InMemoryQuizAttemptRepository()
     attempt = create_quiz_attempt(QUIZ_ID)
-    repo.create_attempt(attempt)
+    repo.create_attempt(attempt, AttemptOwnership(attempt.attempt_id, OWNER_ID))
     assert repo.get_attempt(attempt.attempt_id) is not None
     repo.clear()
     assert repo.get_attempt(attempt.attempt_id) is None
@@ -211,7 +214,7 @@ def test_concurrent_attempt_creations():
     attempts = [create_quiz_attempt(QUIZ_ID) for _ in range(50)]
 
     def create_one(a: QuizAttempt) -> QuizAttempt:
-        return repo.create_attempt(a)
+        return repo.create_attempt(a, AttemptOwnership(a.attempt_id, OWNER_ID))
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         results = list(executor.map(create_one, attempts))
@@ -219,6 +222,7 @@ def test_concurrent_attempt_creations():
     assert len(results) == 50
     for a in attempts:
         assert repo.get_attempt(a.attempt_id) is not None
+        assert repo.get_attempt_ownership(a.attempt_id) == AttemptOwnership(a.attempt_id, OWNER_ID)
 
 
 
@@ -226,7 +230,7 @@ def test_concurrent_completions_preserve_one_winner():
     repo = InMemoryQuizAttemptRepository()
     quiz = build_synthetic_quiz()
     attempt = create_quiz_attempt(QUIZ_ID)
-    repo.create_attempt(attempt)
+    repo.create_attempt(attempt, AttemptOwnership(attempt.attempt_id, OWNER_ID))
     candidates = (
         complete_attempt(attempt=attempt, quiz=quiz, submissions=()),
         complete_attempt(
@@ -251,3 +255,51 @@ def test_concurrent_completions_preserve_one_winner():
     assert len(winners) == 1
     assert outcomes.count(None) == 1
     assert repo.get_attempt(attempt.attempt_id) == winners[0]
+
+
+def test_ownership_lookup_completion_and_clear():
+    repo = InMemoryQuizAttemptRepository()
+    attempt = create_quiz_attempt(QUIZ_ID)
+    ownership = AttemptOwnership(attempt.attempt_id, OWNER_ID)
+    repo.create_attempt(attempt, ownership)
+    assert repo.get_attempt_ownership(attempt.attempt_id) is ownership
+    assert repo.get_attempt_ownership(uuid4()) is None
+    repo.complete_attempt(complete_attempt(attempt=attempt, quiz=build_synthetic_quiz(), submissions=()))
+    assert repo.get_attempt_ownership(attempt.attempt_id) is ownership
+    repo.clear()
+    assert repo.get_attempt(attempt.attempt_id) is None
+    assert repo.get_attempt_ownership(attempt.attempt_id) is None
+
+
+@pytest.mark.parametrize("invalid", [None, "bare_uuid", "wrong_attempt", "invalid_uuid"])
+def test_invalid_ownership_creates_neither_fact(invalid):
+    repo = InMemoryQuizAttemptRepository()
+    attempt = create_quiz_attempt(QUIZ_ID)
+    ownership = AttemptOwnership(uuid4(), OWNER_ID) if invalid == "wrong_attempt" else None
+    if invalid == "bare_uuid":
+        ownership = OWNER_ID
+    if invalid == "invalid_uuid":
+        ownership = AttemptOwnership(attempt.attempt_id, OWNER_ID)
+        object.__setattr__(ownership, "owner_user_id", "invalid")
+    with pytest.raises(QuizAttemptError, match="Ownership"):
+        repo.create_attempt(attempt, ownership)
+    assert repo.get_attempt(attempt.attempt_id) is None
+    assert repo.get_attempt_ownership(attempt.attempt_id) is None
+
+
+def test_creation_requires_ownership_argument():
+    repo = InMemoryQuizAttemptRepository()
+    attempt = create_quiz_attempt(QUIZ_ID)
+    with pytest.raises(TypeError):
+        repo.create_attempt(attempt)
+    assert repo.get_attempt(attempt.attempt_id) is None
+
+
+def test_duplicate_creation_cannot_transfer_ownership():
+    repo = InMemoryQuizAttemptRepository()
+    attempt = create_quiz_attempt(QUIZ_ID)
+    ownership = AttemptOwnership(attempt.attempt_id, OWNER_ID)
+    repo.create_attempt(attempt, ownership)
+    with pytest.raises(QuizAttemptError):
+        repo.create_attempt(attempt, AttemptOwnership(attempt.attempt_id, uuid4()))
+    assert repo.get_attempt_ownership(attempt.attempt_id) is ownership
