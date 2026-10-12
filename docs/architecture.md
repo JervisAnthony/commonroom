@@ -125,12 +125,18 @@ Hogwarts Trials owns `AuthenticatedPrincipal`, `AttemptOwnership`,
 A trusted application principal is not a neutral serialized identity schema;
 resource ownership is not friendship or consent. These concepts are deliberately
 not flattened into generic Permission, Consent, Principal, or Access contracts.
-No authentication implementation or authorization logic is added to core.
+Hogwarts now persists immutable attempt ownership separately from its identity-neutral
+quiz-attempt aggregate and HTTP-enforces ownership before reading attempt state.
+Its trusted-principal dependency defaults to 401; exact-attempt ownership denial,
+including legacy unowned attempts, maps to a generic 404. External authentication
+provider integration remains deferred. No authentication implementation or
+authorization logic is added to core, and no shared generic permission model exists.
 
 ### Deferred Shared Concepts and Integration
 
-- Authentication provider integration and authenticated-principal integration.
-- Product authorization integration; authorization rules remain product-local.
+- External authentication provider integration and credential validation.
+- Further product authorization integration; Hogwarts attempt ownership is enforced,
+  and authorization rules remain product-local.
 - Account metadata and additional wizarding profile contracts.
 - Friendship graphs as shared ecosystem contracts and generic privacy/consent
   contracts, pending concrete multi-product need.

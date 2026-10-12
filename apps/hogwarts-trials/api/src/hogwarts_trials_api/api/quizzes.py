@@ -10,6 +10,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from hogwarts_trials_api.api.dependencies import (
+    get_current_principal,
     get_quiz_attempt_repository,
     get_quiz_repository,
 )
@@ -25,6 +26,10 @@ from hogwarts_trials_api.api.schemas import (
     quiz_attempt_to_response,
     quiz_result_to_response,
 )
+from hogwarts_trials_api.application.attempt_authorization import (
+    AttemptOwnership,
+)
+from hogwarts_trials_api.application.identity import AuthenticatedPrincipal
 from hogwarts_trials_api.application.quiz_attempt_repository import (
     QuizAttemptRepository,
 )
@@ -36,6 +41,8 @@ router = APIRouter(
     prefix="/api/v1/quizzes",
     tags=["quizzes"],
 )
+
+PrincipalDep = Annotated[AuthenticatedPrincipal, Depends(get_current_principal)]
 
 QuizRepoDep = Annotated[QuizRepository, Depends(get_quiz_repository)]
 QuizAttemptRepoDep = Annotated[
@@ -137,13 +144,15 @@ def grade_quiz_endpoint(
 )
 def start_quiz_attempt(
     quiz_id: UUID,
+    principal: PrincipalDep,
     quiz_repo: QuizRepoDep,
     attempt_repo: QuizAttemptRepoDep,
 ) -> QuizAttemptResponse:
     """Start a new server-owned quiz attempt.
 
     Verifies the quiz exists (404 if not found), generates an authoritative
-    server-side UUID v4 attempt ID, persists an in_progress attempt, and returns 201 Created.
+    server-side UUID v4 attempt ID, atomically persists the attempt and principal's
+    ownership fact, and returns 201 Created.
     """
     quiz = quiz_repo.get_quiz(quiz_id)
     if quiz is None:
@@ -153,5 +162,6 @@ def start_quiz_attempt(
         )
 
     attempt = create_quiz_attempt(quiz_id=quiz.quiz_id)
-    persisted = attempt_repo.create_attempt(attempt)
+    ownership = AttemptOwnership(attempt.attempt_id, principal.user_id)
+    persisted = attempt_repo.create_attempt(attempt, ownership)
     return quiz_attempt_to_response(persisted)

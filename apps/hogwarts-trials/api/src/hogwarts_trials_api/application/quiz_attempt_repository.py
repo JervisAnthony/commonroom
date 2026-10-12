@@ -8,6 +8,7 @@ logic to concrete storage engines.
 from typing import Protocol, runtime_checkable
 from uuid import UUID
 
+from hogwarts_trials_api.application.attempt_authorization import AttemptOwnership
 from hogwarts_trials_api.domain.attempt import QuizAttempt
 
 
@@ -15,8 +16,12 @@ from hogwarts_trials_api.domain.attempt import QuizAttempt
 class QuizAttemptRepository(Protocol):
     """Repository interface for quiz attempt lifecycle persistence."""
 
-    def create_attempt(self, attempt: QuizAttempt) -> QuizAttempt:
-        """Persist a newly started in-progress quiz attempt.
+    def create_attempt(
+        self, attempt: QuizAttempt, ownership: AttemptOwnership
+    ) -> QuizAttempt:
+        """Atomically persist a new attempt and its immutable, matching ownership fact.
+
+        Invalid ownership or mismatched attempt IDs raise QuizAttemptError.
 
         Raises:
             QuizAttemptError: If an attempt with the same attempt_id already exists.
@@ -25,6 +30,10 @@ class QuizAttemptRepository(Protocol):
 
     def get_attempt(self, attempt_id: UUID) -> QuizAttempt | None:
         """Retrieve a quiz attempt by its unique identifier, or None if not found."""
+        ...
+
+    def get_attempt_ownership(self, attempt_id: UUID) -> AttemptOwnership | None:
+        """Retrieve only the exact attempt ownership fact, or None (including legacy rows)."""
         ...
 
     def complete_attempt(self, attempt: QuizAttempt) -> QuizAttempt:

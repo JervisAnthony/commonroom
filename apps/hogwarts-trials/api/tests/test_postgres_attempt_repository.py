@@ -36,9 +36,12 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from hogwarts_trials_api.api.dependencies import (
+    get_current_principal,
     get_quiz_attempt_repository,
     get_quiz_repository,
 )
+from hogwarts_trials_api.application.attempt_authorization import AttemptOwnership
+from hogwarts_trials_api.application.identity import AuthenticatedPrincipal
 from hogwarts_trials_api.application.quiz_attempt_repository import (
     QuizAttemptRepository,
 )
@@ -76,6 +79,7 @@ from hogwarts_trials_api.infrastructure.models import (
     QuestionCorrectChoiceModel,
     QuestionModel,
     QuizAttemptModel,
+    QuizAttemptOwnershipModel,
     QuizAttemptQuestionResultModel,
     QuizAttemptSelectedChoiceModel,
     QuizModel,
@@ -90,10 +94,13 @@ from hogwarts_trials_api.infrastructure.postgres_quiz_repository import (
 from hogwarts_trials_api.infrastructure.quiz_mapper import quiz_domain_to_model
 from hogwarts_trials_api.main import app
 
+OWNER_ID = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+
 TEST_DB_URL_ENV_VAR = "HOGWARTS_TRIALS_TEST_DATABASE_URL"
 TEST_DB_URL = os.environ.get(TEST_DB_URL_ENV_VAR)
 
 SENSITIVE_FIELD_NAMES = (
+    "user_id", "owner_user_id", "ownership", "token",
     "correct_choice_ids",
     "explanation",
     "provenance",
@@ -153,7 +160,7 @@ def test_postgres_repo_create_and_get_attempt(sqlite_attempt_repo):
     attempt_repo, _, _ = sqlite_attempt_repo
     attempt = create_quiz_attempt(DEMO_QUIZ_ID)
 
-    created = attempt_repo.create_attempt(attempt)
+    created = attempt_repo.create_attempt(attempt, AttemptOwnership(attempt.attempt_id, OWNER_ID))
     assert created == attempt
 
     retrieved = attempt_repo.get_attempt(attempt.attempt_id)
@@ -172,7 +179,7 @@ def test_postgres_repo_get_unknown_attempt(sqlite_attempt_repo):
 def test_postgres_repo_duplicate_attempt_rejected(sqlite_attempt_repo):
     attempt_repo, _, _ = sqlite_attempt_repo
     attempt = create_quiz_attempt(DEMO_QUIZ_ID)
-    attempt_repo.create_attempt(attempt)
+    attempt_repo.create_attempt(attempt, AttemptOwnership(attempt.attempt_id, OWNER_ID))
 
     duplicate = QuizAttempt(
         attempt_id=attempt.attempt_id,
@@ -180,13 +187,13 @@ def test_postgres_repo_duplicate_attempt_rejected(sqlite_attempt_repo):
         status=AttemptStatus.in_progress,
     )
     with pytest.raises(QuizAttemptError, match="already exists"):
-        attempt_repo.create_attempt(duplicate)
+        attempt_repo.create_attempt(duplicate, AttemptOwnership(duplicate.attempt_id, OWNER_ID))
 
 
 def test_postgres_repo_completion_transaction(sqlite_attempt_repo):
     attempt_repo, quiz_repo, factory = sqlite_attempt_repo
     attempt = create_quiz_attempt(DEMO_QUIZ_ID)
-    attempt_repo.create_attempt(attempt)
+    attempt_repo.create_attempt(attempt, AttemptOwnership(attempt.attempt_id, OWNER_ID))
 
     quiz = quiz_repo.get_quiz(DEMO_QUIZ_ID)
     assert quiz is not None
@@ -199,6 +206,7 @@ def test_postgres_repo_completion_transaction(sqlite_attempt_repo):
     completed = complete_attempt(attempt=attempt, quiz=quiz, submissions=submissions)
     persisted = attempt_repo.complete_attempt(completed)
 
+    assert attempt_repo.get_attempt_ownership(attempt.attempt_id) == AttemptOwnership(attempt.attempt_id, OWNER_ID)
     assert persisted == completed
 
     # Verify rows in database
@@ -235,7 +243,7 @@ def test_postgres_repo_completion_transaction(sqlite_attempt_repo):
 def test_postgres_repo_deterministic_retrieval(sqlite_attempt_repo):
     attempt_repo, quiz_repo, _ = sqlite_attempt_repo
     attempt = create_quiz_attempt(DEMO_QUIZ_ID)
-    attempt_repo.create_attempt(attempt)
+    attempt_repo.create_attempt(attempt, AttemptOwnership(attempt.attempt_id, OWNER_ID))
 
     quiz = quiz_repo.get_quiz(DEMO_QUIZ_ID)
     completed = complete_attempt(attempt=attempt, quiz=quiz, submissions=())
@@ -250,7 +258,7 @@ def test_postgres_repo_deterministic_retrieval(sqlite_attempt_repo):
 def test_postgres_repo_cannot_complete_twice(sqlite_attempt_repo):
     attempt_repo, quiz_repo, _ = sqlite_attempt_repo
     attempt = create_quiz_attempt(DEMO_QUIZ_ID)
-    attempt_repo.create_attempt(attempt)
+    attempt_repo.create_attempt(attempt, AttemptOwnership(attempt.attempt_id, OWNER_ID))
 
     quiz = quiz_repo.get_quiz(DEMO_QUIZ_ID)
     completed = complete_attempt(attempt=attempt, quiz=quiz, submissions=())
@@ -273,7 +281,7 @@ def test_postgres_repo_complete_unknown_attempt_raises(sqlite_attempt_repo):
 def test_postgres_repo_rollback_on_failure(sqlite_attempt_repo):
     attempt_repo, quiz_repo, factory = sqlite_attempt_repo
     attempt = create_quiz_attempt(DEMO_QUIZ_ID)
-    attempt_repo.create_attempt(attempt)
+    attempt_repo.create_attempt(attempt, AttemptOwnership(attempt.attempt_id, OWNER_ID))
 
     quiz = quiz_repo.get_quiz(DEMO_QUIZ_ID)
     completed = complete_attempt(attempt=attempt, quiz=quiz, submissions=())
@@ -321,6 +329,7 @@ def test_database_backed_api_endpoints(sqlite_attempt_repo):
     attempt_repo, quiz_repo, _ = sqlite_attempt_repo
     client = TestClient(app)
 
+    app.dependency_overrides[get_current_principal] = lambda: AuthenticatedPrincipal(OWNER_ID)
     app.dependency_overrides[get_quiz_repository] = lambda: quiz_repo
     app.dependency_overrides[get_quiz_attempt_repository] = lambda: attempt_repo
 
@@ -398,7 +407,7 @@ def postgres_migrated_db(postgres_test_engine):
     alembic_cfg = Config(str(alembic_ini_path))
     alembic_cfg.set_main_option("sqlalchemy.url", validate_database_url(TEST_DB_URL))
 
-    # Apply all migrations to head (0001 and 0002)
+    # Apply all migrations to head (0001, 0002, and 0003)
     command.upgrade(alembic_cfg, "head")
 
     yield postgres_test_engine
@@ -447,7 +456,7 @@ def test_postgres_migration_0002_upgrade_downgrade_cycle():
         assert "quizzes" in tables
         assert "questions" in tables
 
-    # Upgrade back to head (0002)
+    # Upgrade back to head (0003)
     command.upgrade(alembic_cfg, "head")
     with engine.connect() as conn:
         insp = inspect(conn)
@@ -470,7 +479,9 @@ def test_postgres_attempt_lifecycle_integration(postgres_session_factory):
 
     # 1. Create attempt
     attempt = create_quiz_attempt(DEMO_QUIZ_ID)
-    attempt_repo.create_attempt(attempt)
+    attempt_repo.create_attempt(attempt, AttemptOwnership(attempt.attempt_id, OWNER_ID))
+    assert attempt_repo.get_attempt_ownership(attempt.attempt_id) == AttemptOwnership(attempt.attempt_id, OWNER_ID)
+    assert attempt_repo.get_attempt_ownership(uuid4()) is None
 
     # 2. Retrieve in-progress attempt
     retrieved = attempt_repo.get_attempt(attempt.attempt_id)
@@ -496,6 +507,7 @@ def test_postgres_attempt_lifecycle_integration(postgres_session_factory):
     assert final_read is not None
     assert final_read == completed
     assert final_read.result == completed.result
+    assert attempt_repo.get_attempt_ownership(attempt.attempt_id) == AttemptOwnership(attempt.attempt_id, OWNER_ID)
 
 
 @requires_postgres
@@ -509,6 +521,7 @@ def test_postgres_api_attempt_endpoints_integration(postgres_session_factory):
     quiz_repo = PostgresQuizRepository(session_factory=postgres_session_factory)
 
     client = TestClient(app)
+    app.dependency_overrides[get_current_principal] = lambda: AuthenticatedPrincipal(OWNER_ID)
     app.dependency_overrides[get_quiz_repository] = lambda: quiz_repo
     app.dependency_overrides[get_quiz_attempt_repository] = lambda: attempt_repo
 
@@ -559,7 +572,7 @@ def test_postgres_concurrent_completions_preserve_one_winner(postgres_session_fa
 
     repo = PostgresQuizAttemptRepository(session_factory=postgres_session_factory)
     attempt = create_quiz_attempt(DEMO_QUIZ_ID)
-    repo.create_attempt(attempt)
+    repo.create_attempt(attempt, AttemptOwnership(attempt.attempt_id, OWNER_ID))
     candidates = (
         complete_attempt(attempt=attempt, quiz=_DEMO_QUIZ, submissions=()),
         complete_attempt(
@@ -599,3 +612,154 @@ def test_postgres_concurrent_completions_preserve_one_winner(postgres_session_fa
         assert len(selected_rows) == sum(
             len(result.selected_choice_ids) for result in winners[0].result.question_results
         )
+
+
+def test_postgres_ownership_roundtrip(sqlite_attempt_repo):
+    repo, _, factory = sqlite_attempt_repo
+    attempt = create_quiz_attempt(DEMO_QUIZ_ID)
+    ownership = AttemptOwnership(attempt.attempt_id, OWNER_ID)
+    repo.create_attempt(attempt, ownership)
+    assert repo.get_attempt_ownership(attempt.attempt_id) == ownership
+    assert repo.get_attempt_ownership(uuid4()) is None
+    with factory() as session:
+        row = session.get(QuizAttemptOwnershipModel, attempt.attempt_id)
+        assert row.owner_user_id == OWNER_ID
+    with pytest.raises(QuizAttemptError):
+        repo.create_attempt(attempt, AttemptOwnership(attempt.attempt_id, uuid4()))
+    assert repo.get_attempt_ownership(attempt.attempt_id) == ownership
+
+
+@pytest.mark.parametrize("invalid", [None, "bare_uuid", "wrong_attempt", "invalid_uuid"])
+def test_postgres_invalid_ownership_stores_neither_fact(sqlite_attempt_repo, invalid):
+    repo, _, _ = sqlite_attempt_repo
+    attempt = create_quiz_attempt(DEMO_QUIZ_ID)
+    ownership = AttemptOwnership(uuid4(), OWNER_ID) if invalid == "wrong_attempt" else None
+    if invalid == "bare_uuid":
+        ownership = OWNER_ID
+    if invalid == "invalid_uuid":
+        ownership = AttemptOwnership(attempt.attempt_id, OWNER_ID)
+        object.__setattr__(ownership, "owner_user_id", "invalid")
+    with pytest.raises(QuizAttemptError, match="Ownership"):
+        repo.create_attempt(attempt, ownership)
+    assert repo.get_attempt(attempt.attempt_id) is None
+    assert repo.get_attempt_ownership(attempt.attempt_id) is None
+
+
+def test_postgres_ownership_insert_failure_rolls_back_attempt(sqlite_attempt_repo):
+    repo, _, factory = sqlite_attempt_repo
+    attempt = create_quiz_attempt(DEMO_QUIZ_ID)
+
+    def fail_insert(mapper, connection, target):
+        raise RuntimeError("Simulated ownership insert failure")
+
+    event.listen(QuizAttemptOwnershipModel, "before_insert", fail_insert)
+    try:
+        with pytest.raises(RuntimeError, match="ownership insert failure"):
+            repo.create_attempt(attempt, AttemptOwnership(attempt.attempt_id, OWNER_ID))
+    finally:
+        event.remove(QuizAttemptOwnershipModel, "before_insert", fail_insert)
+    with factory() as session:
+        assert session.get(QuizAttemptModel, attempt.attempt_id) is None
+        assert session.get(QuizAttemptOwnershipModel, attempt.attempt_id) is None
+
+
+def test_postgres_attempt_insert_failure_stores_neither_fact(sqlite_attempt_repo):
+    repo, _, factory = sqlite_attempt_repo
+    attempt = create_quiz_attempt(uuid4())  # Nonexistent quiz FK.
+    from sqlalchemy.exc import IntegrityError
+    with pytest.raises(IntegrityError):
+        repo.create_attempt(attempt, AttemptOwnership(attempt.attempt_id, OWNER_ID))
+    with factory() as session:
+        assert session.get(QuizAttemptModel, attempt.attempt_id) is None
+        assert session.get(QuizAttemptOwnershipModel, attempt.attempt_id) is None
+
+
+def test_legacy_unowned_attempt_denies_all_principals(sqlite_attempt_repo):
+    repo, quiz_repo, factory = sqlite_attempt_repo
+    attempt = create_quiz_attempt(DEMO_QUIZ_ID)
+    with factory() as session:
+        session.add(QuizAttemptModel(attempt_id=attempt.attempt_id, quiz_id=attempt.quiz_id, status="in_progress"))
+        session.commit()
+    assert repo.get_attempt_ownership(attempt.attempt_id) is None
+    assert repo.get_attempt(attempt.attempt_id) == attempt
+    app.dependency_overrides[get_quiz_repository] = lambda: quiz_repo
+    app.dependency_overrides[get_quiz_attempt_repository] = lambda: repo
+    try:
+        client = TestClient(app)
+        for user_id in [OWNER_ID, UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")]:
+            app.dependency_overrides[get_current_principal] = lambda: AuthenticatedPrincipal(user_id)
+            for response in [
+                client.get(f"/api/v1/attempts/{attempt.attempt_id}"),
+                client.post(f"/api/v1/attempts/{attempt.attempt_id}/submit", json={"submissions": []}),
+            ]:
+                assert response.status_code == 404
+                assert response.json() == {"detail": "Attempt not found"}
+        assert repo.get_attempt(attempt.attempt_id) == attempt
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_migration_0003_shape_legacy_and_roundtrip():
+    """Execute real revision operations on SQLite without changing production URL rules."""
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+    from alembic.script import ScriptDirectory
+    from sqlalchemy import text
+
+    config = Config(str(Path(__file__).resolve().parent.parent / "alembic.ini"))
+    scripts = ScriptDirectory.from_config(config)
+    revisions = list(scripts.walk_revisions())
+    assert [(r.revision, r.down_revision) for r in revisions] == [
+        ("0003", "0002"), ("0002", "0001"), ("0001", None)
+    ]
+    engine = create_engine("sqlite:///:memory:")
+    legacy_id = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+    with engine.begin() as conn:
+        conn.exec_driver_sql("PRAGMA foreign_keys=ON")
+        operations = Operations(MigrationContext.configure(conn))
+        with Operations.context(operations.migration_context):
+            scripts.get_revision("0001").module.upgrade()
+            scripts.get_revision("0002").module.upgrade()
+            conn.execute(text("INSERT INTO quizzes (quiz_id, title) VALUES (:quiz_id, 'Synthetic migration quiz')"), {"quiz_id": DEMO_QUIZ_ID.hex})
+            conn.execute(text("INSERT INTO quiz_attempts (attempt_id, quiz_id, status) VALUES (:attempt_id, :quiz_id, 'in_progress')"), {"attempt_id": legacy_id.hex, "quiz_id": DEMO_QUIZ_ID.hex})
+            tables_before = set(inspect(conn).get_table_names())
+            scripts.get_revision("0003").module.upgrade()
+            insp = inspect(conn)
+            columns = insp.get_columns("quiz_attempt_ownerships")
+            assert {c["name"] for c in columns} == {"attempt_id", "owner_user_id"}
+            assert all(not c["nullable"] for c in columns)
+            assert insp.get_pk_constraint("quiz_attempt_ownerships")["constrained_columns"] == ["attempt_id"]
+            fks = insp.get_foreign_keys("quiz_attempt_ownerships")
+            assert len(fks) == 1
+            assert fks[0]["constrained_columns"] == ["attempt_id"]
+            assert fks[0]["referred_table"] == "quiz_attempts"
+            assert fks[0]["referred_columns"] == ["attempt_id"]
+            assert fks[0]["options"]["ondelete"] == "CASCADE"
+            assert conn.scalar(text("SELECT COUNT(*) FROM quiz_attempt_ownerships")) == 0
+            scripts.get_revision("0003").module.downgrade()
+            assert set(inspect(conn).get_table_names()) == tables_before
+            assert conn.scalar(text("SELECT COUNT(*) FROM quiz_attempts")) == 1
+            scripts.get_revision("0003").module.upgrade()
+            assert conn.scalar(text("SELECT COUNT(*) FROM quiz_attempt_ownerships")) == 0
+            conn.execute(text("INSERT INTO quiz_attempt_ownerships (attempt_id, owner_user_id) VALUES (:attempt_id, :owner)"), {"attempt_id": legacy_id.hex, "owner": OWNER_ID.hex})
+            conn.execute(text("DELETE FROM quiz_attempts WHERE attempt_id=:attempt_id"), {"attempt_id": legacy_id.hex})
+            assert conn.scalar(text("SELECT COUNT(*) FROM quiz_attempt_ownerships")) == 0
+    engine.dispose()
+
+
+@requires_postgres
+def test_postgres_migration_0003_upgrade_downgrade_cycle():
+    config = Config(str(Path(__file__).resolve().parent.parent / "alembic.ini"))
+    config.set_main_option("sqlalchemy.url", validate_database_url(TEST_DB_URL))
+    command.upgrade(config, "head")
+    command.downgrade(config, "0002")
+    engine = create_db_engine(TEST_DB_URL)
+    try:
+        with engine.connect() as conn:
+            assert "quiz_attempt_ownerships" not in inspect(conn).get_table_names()
+            assert "quiz_attempts" in inspect(conn).get_table_names()
+        command.upgrade(config, "head")
+        with engine.connect() as conn:
+            assert "quiz_attempt_ownerships" in inspect(conn).get_table_names()
+    finally:
+        engine.dispose()
