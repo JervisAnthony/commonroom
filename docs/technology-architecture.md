@@ -110,6 +110,12 @@ graph TD
 - **ADR References**: [ADR 0001](adr/0001-client-platforms.md), [ADR 0002](adr/0002-backend-and-api.md), [ADR 0003](adr/0003-data-and-retrieval.md).
 
 ### 4.3 The Burrow Clock
+
+Current implementation is limited to a health-only FastAPI API and PostgreSQL
+friendship, directional consent and finite session metadata persistence. The
+WebSockets, geofences, coordinates, presence observations and authentication
+below describe future architecture; none are activated by this persistence layer.
+
 - **Client**: Mobile-first application built with React Native and Expo (TypeScript). Integrates with native mobile OS background location APIs, geofences, and secure local storage.
 - **Backend**: FastAPI service managing bidirectional WebSocket connections for presence synchronization, geofence boundary matching, friend consent verification, and session timeouts.
 - **Datastore**: PostgreSQL storing friend graphs, explicit consent logs, geofence coordinates, active sharing sessions, and ephemeral presence states.

@@ -52,8 +52,8 @@ application is `burrow_clock_api.main:app`, titled **The Burrow Clock API**.
 ```
 
 The API imports without environment configuration, external infrastructure,
-network calls, or filesystem mutation. It has no database or privacy-sensitive
-integration, and the mobile shell does not connect to it yet.
+network calls, or filesystem mutation. Product-local persistence is constructed
+explicitly; it is not connected to HTTP or the mobile shell.
 
 Use Python 3.13.x from `.python-version` and uv 0.12.x. From the repository root,
 configure an external environment before syncing or running commands; do not
@@ -72,8 +72,9 @@ On a POSIX shell, set the external environment with
 `export UV_PROJECT_ENVIRONMENT="${TMPDIR:-/tmp}/commonroom-burrow-clock-api-venv"`
 before running the same uv and Python commands. Uvicorn serves the health endpoint
 at `http://127.0.0.1:8000/api/v1/health` by default. The dedicated API CI workflow
-checks the toolchain, frozen workspace dependencies, health tests, repository
-integrity, and working tree cleanliness without service containers or secrets.
+checks the toolchain, frozen workspace dependencies, a dedicated PostgreSQL 17
+service, migrations, the full API suite, repository integrity, and working tree
+cleanliness. Its synthetic database credentials are confined to the CI test service.
 
 ## Consent Domain Foundation
 
@@ -99,9 +100,9 @@ active. Repeat revocation raises `ValueError`; no automatic re-grant exists.
 Invalid timestamps and scopes also raise `ValueError`.
 
 The model contains no users, friends, coordinates, persistence, or API surface.
-Expiry and revocation are executable domain semantics only: no scheduler,
-revocation API, persistence, or user workflow exists yet. The application endpoint
-remains `GET /api/v1/health` only. Run the focused deterministic tests with the
+Expiry and revocation remain executable domain semantics. Persistence now records
+those terms, but no scheduler, revocation API or user workflow exists yet. The
+application endpoint remains `GET /api/v1/health` only. Run the focused deterministic tests with the
 external Python environment configured as above:
 
 ```sh
@@ -135,17 +136,18 @@ behavior when the relationship and permission match. Evaluation uses an
 explicit time, never the current clock.
 
 An absent active friendship denies even with a stale, otherwise active
-permission. Future trusted storage must return no active `Friendship` after
-removal, blocking, or unfriending, and authorization must retrieve both facts
-on every evaluation. Relationship lifecycle and actual block/unfriend workflows
-are not implemented; the policy does not mutate stale permissions.
+permission. Trusted storage returns no active `Friendship` after termination,
+and authorization retrieves current facts on every evaluation. Internal
+termination is implemented; actual block/unfriend user workflows remain deferred.
+The pure policy does not mutate stale permissions.
 
 `FriendshipRepository.get_active_friendship_between(user_a_id, user_b_id)`
 looks up an active relationship independently of member order.
 `SharingPermissionRepository.get_permission(friendship_id, sharer_user_id,
 recipient_user_id)` looks up one exact direction. These runtime-checkable
 protocols in `application/repositories.py` are read-side trusted-storage
-boundaries only, with no mutation methods, repository adapters, or persistence.
+boundaries. Product-local PostgreSQL adapters now implement them; separate
+internal lifecycle ports provide trusted writes without exposing HTTP mutations.
 UUIDs do not establish identity or authentication. The API remains
 `GET /api/v1/health` only, and no location data exists.
 
@@ -155,17 +157,36 @@ Run the focused deterministic suite using the configured external environment:
 uv run --frozen --project apps/burrow-clock/api pytest apps/burrow-clock/api/tests/test_friend_sharing.py
 ```
 
+## PostgreSQL Persistence Foundation
+
+Commit 21 adds SQLAlchemy 2.x, psycopg v3 and product-local Alembic revision `0001`.
+The three tables store canonical active/terminated friendships, versioned directional
+consent grants, and finite sharing-session metadata. Re-friending uses
+a new friendship UUID. Explicit re-grant uses a new grant UUID and removes sessions
+bound to its predecessor. Active session reads re-evaluate current friendship,
+exact grant identity, direction, scope and time through the existing pure policy.
+Revocation/expiry deny at their exact boundary. Sessions alone never authorize
+sharing, and read-time expiry never depends on cleanup scheduling.
+
+Session ending deletes metadata; explicit expired-session cleanup is available,
+without a background worker or permanent activity ledger. The implementation
+collects no GPS/location data and creates no public mutation route. Database URLs
+are supplied lazily via `BURROW_CLOCK_DATABASE_URL`; live tests use only the dedicated
+`BURROW_CLOCK_TEST_DATABASE_URL`. Authentication remains deferred, and future public
+mutations must authorize a trusted principal before calling internal writers.
+See the [API persistence guide](api/README.md) for schema details, constraints,
+locking guarantees, retention limits, migration commands and tests.
+
 ## Deferred Functionality
 
 - Authentication, authorization integration with authenticated principals, and users/accounts
 - Friendship invitations/requests and accept/reject/block/unfriend workflows
-- Repository adapters and friendship/permission REST APIs
-- Sharing sessions, revocation API/workflow, and expiry scheduling
+- Friendship/permission REST APIs
+- User-facing sharing sessions, revocation API/workflow, and expiry scheduling
 - GPS permissions, foreground location collection, and background location collection
 - Coordinates and raw coordinate persistence
 - Geofencing and presence computation
 - WebSockets and realtime presence
-- PostgreSQL/database persistence and migrations
 - Maps
 - Notifications
 - Emergency/SOS functionality

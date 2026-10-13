@@ -30,6 +30,21 @@ jobs:
     name: Burrow Clock API Integrity
     runs-on: ubuntu-latest
 
+    services:
+      burrow-postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: burrow_clock_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -75,7 +90,15 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --all-packages
 
-      - name: Run API tests
+      - name: Run Burrow Clock database migrations
+        env:
+          BURROW_CLOCK_TEST_DATABASE_URL: postgresql+psycopg://test_user:test_password@localhost:5432/burrow_clock_test
+        run: uv run --frozen --project apps/burrow-clock/api alembic -c apps/burrow-clock/api/alembic.ini upgrade head
+
+      - name: Run API tests including required PostgreSQL coverage
+        env:
+          BURROW_CLOCK_TEST_DATABASE_URL: postgresql+psycopg://test_user:test_password@localhost:5432/burrow_clock_test
+          BURROW_CLOCK_REQUIRE_POSTGRES_TESTS: "1"
         run: uv run --frozen --project apps/burrow-clock/api pytest apps/burrow-clock/api/tests
 
       - name: Run repository validation
