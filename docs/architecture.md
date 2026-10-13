@@ -118,7 +118,12 @@ The Burrow Clock owns `SharingScope` (PRESENCE / APPROXIMATE / PRECISE),
 `ConsentGrant`, `Friendship`, `SharingPermission`, `is_disclosure_allowed`, and
 `is_friend_disclosure_allowed`. Its disclosure levels and relationship-sharing
 rules are product-specific, and only Burrow Clock currently requires this exact
-consent model.
+consent model. Burrow persists active/terminated relationships, directional grant
+versions and finite sharing-session metadata in its own PostgreSQL datastore.
+Session evaluation rechecks current friendship and the exact consent grant through
+the existing product-local policy; old grants/sessions cannot revive after re-grant
+or re-friending. The API remains health-only, with external authentication and actual
+location disclosure deferred. No shared generic permission/consent model is added.
 
 Hogwarts Trials owns `AuthenticatedPrincipal`, `AttemptOwnership`,
 `can_access_attempt`, `require_attempt_owner`, and `AttemptAccessDeniedError`.
