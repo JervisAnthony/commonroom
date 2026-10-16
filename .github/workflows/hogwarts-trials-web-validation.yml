@@ -70,6 +70,9 @@ jobs:
       - name: Typecheck
         run: pnpm --filter hogwarts-trials-web run typecheck
 
+      - name: Test quiz state and public API boundaries
+        run: pnpm --filter hogwarts-trials-web run test
+
       - name: Build
         run: pnpm --filter hogwarts-trials-web run build
 
