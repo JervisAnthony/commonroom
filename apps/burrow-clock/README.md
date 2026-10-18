@@ -53,7 +53,7 @@ application is `burrow_clock_api.main:app`, titled **The Burrow Clock API**.
 
 The API imports without environment configuration, external infrastructure,
 network calls, or filesystem mutation. Product-local persistence is constructed
-explicitly; it is not connected to HTTP or the mobile shell.
+lazily for authenticated metadata routes; the mobile shell remains unconnected.
 
 Use Python 3.13.x from `.python-version` and uv 0.12.x. From the repository root,
 configure an external environment before syncing or running commands; do not
@@ -100,9 +100,9 @@ active. Repeat revocation raises `ValueError`; no automatic re-grant exists.
 Invalid timestamps and scopes also raise `ValueError`.
 
 The model contains no users, friends, coordinates, persistence, or API surface.
-Expiry and revocation remain executable domain semantics. Persistence now records
-those terms, but no scheduler, revocation API or user workflow exists yet. The
-application endpoint remains `GET /api/v1/health` only. Run the focused deterministic tests with the
+Expiry and revocation remain executable domain semantics. Persistence records
+those terms, and Commit 23 exposes protected metadata/revocation REST workflows.
+No scheduler or mobile sharing workflow exists. Run the focused deterministic tests with the
 external Python environment configured as above:
 
 ```sh
@@ -147,9 +147,9 @@ looks up an active relationship independently of member order.
 recipient_user_id)` looks up one exact direction. These runtime-checkable
 protocols in `application/repositories.py` are read-side trusted-storage
 boundaries. Product-local PostgreSQL adapters now implement them; separate
-internal lifecycle ports provide trusted writes without exposing HTTP mutations.
-UUIDs do not establish identity or authentication. The API remains
-`GET /api/v1/health` only, and no location data exists.
+internal lifecycle ports provide trusted writes. Commit 23 adds separately
+authorized HTTP mutations. UUIDs do not establish identity or authentication,
+and no location data exists.
 
 Run the focused deterministic suite using the configured external environment:
 
@@ -170,19 +170,55 @@ sharing, and read-time expiry never depends on cleanup scheduling.
 
 Session ending deletes metadata; explicit expired-session cleanup is available,
 without a background worker or permanent activity ledger. The implementation
-collects no GPS/location data and creates no public mutation route. Database URLs
+collects no GPS/location data. Commit 23 adds authorization-gated metadata mutations. Database URLs
 are supplied lazily via `BURROW_CLOCK_DATABASE_URL`; live tests use only the dedicated
-`BURROW_CLOCK_TEST_DATABASE_URL`. Authentication remains deferred, and future public
-mutations must authorize a trusted principal before calling internal writers.
+`BURROW_CLOCK_TEST_DATABASE_URL`. Real authentication remains deferred; protected
+HTTP operations require a trusted principal and default to 401 until an adapter exists.
 See the [API persistence guide](api/README.md) for schema details, constraints,
 locking guarantees, retention limits, migration commands and tests.
 
+## Protected Metadata REST API
+
+Commit 23 exposes friendship lookup/termination, directional grants/current consent/
+revocation, and finite sharing-session creation/read/ending under `/api/v1`.
+Every new route requires Burrow's own immutable `AuthenticatedPrincipal`; the
+production `get_current_principal()` always fails closed with HTTP 401 until a real
+adapter validates credentials. UUIDs, custom identity headers, request actors and
+unverified bearer strings do not authenticate anyone. Health stays public.
+
+The principal is the sharer for grants and session creation, and the recipient for
+active-session reads. Friendship termination checks exact membership; grant revoke
+and session end check exact sharer ownership inside the mutation transaction.
+All use authoritative database facts and the existing
+`friendship -> permission -> session` lock order. Scope names are `PRESENCE`,
+`APPROXIMATE`, `PRECISE`; session duration is an explicit strict integer from
+60 to 86400 seconds, inclusive. Server-generated UTC
+start/expiry never exceeds finite consent. Access denies at expiry/revocation,
+after re-grant or friendship termination, and for wrong directions or scopes.
+Metadata reads grant no reusable disclosure capability.
+
+There is no friendship creation endpoint, invitation flow or mobile API connection.
+No route collects or returns GPS, coordinates or actual presence/location data.
+Write requests forbid client-controlled actor/sharer identity, permission/session
+identities and lifecycle flags. Legitimate `recipient_user_id` UUID fields remain
+accepted for grant and session creation. Request DTOs forbid extra write fields;
+responses project minimal authorization metadata. Missing/inaccessible resources
+share 404, state conflicts use 409,
+invalid inputs 422 and unavailable persistence a sanitized 503. Anonymous requests
+never initialize the lazy database engine; lifespan shutdown disposes it.
+
+See the [API guide](api/README.md#protected-rest-metadata-workflows) for every route,
+request/response contract, test overrides, configuration and transaction semantics.
+Use the external uv commands above for local startup and the complete suite.
+Tests inject fixed clocks and trusted synthetic principals through dependency
+overrides; production has no identity fallback. Live PostgreSQL 17 tests use only
+the dedicated safety-validated test URL and are mandatory in CI.
+
 ## Deferred Functionality
 
-- Authentication, authorization integration with authenticated principals, and users/accounts
-- Friendship invitations/requests and accept/reject/block/unfriend workflows
-- Friendship/permission REST APIs
-- User-facing sharing sessions, revocation API/workflow, and expiry scheduling
+- Real authentication provider/token integration and users/accounts
+- Friendship invitations/requests, mutual acceptance and blocking workflows
+- Mobile sharing workflows and background expiry cleanup scheduling
 - GPS permissions, foreground location collection, and background location collection
 - Coordinates and raw coordinate persistence
 - Geofencing and presence computation
@@ -194,5 +230,5 @@ locking guarantees, retention limits, migration commands and tests.
 
 The privacy invariants above govern future implementations. The mobile shell and
 API health endpoint do not collect or disclose location data. The pure domain
-facts and policy do not implement sharing sessions or authenticated sharing.
+facts and policy support protected session metadata, not actual presence/location disclosure.
 
