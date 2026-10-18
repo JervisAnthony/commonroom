@@ -14,10 +14,11 @@
 ## Mobile Application Foundation
 
 Commit 14 introduces the mobile shell in `mobile/`: TypeScript, React Native,
-and stable Expo SDK 57 for iOS and Android. Its initial screen contains original
-Commonroom text and styling, including a visible reminder that location sharing
-is off by default. It requests no location permissions and collects no location
-data. No franchise artwork, logos, book passages, or production content are included.
+and stable Expo SDK 57 for iOS and Android. Commit 24 extends it with an interactive
+[local privacy and consent preview](mobile/README.md), using original Commonroom
+styling and a prominent reminder that location sharing is always off. It requests
+no location permissions and collects no location data. No franchise artwork,
+logos, book passages, or production content are included.
 
 The app uses the existing pnpm workspace, the Node version in `.node-version`,
 and the pnpm version in the root `package.json`. Run these commands from the
@@ -28,6 +29,7 @@ pnpm install --frozen-lockfile --ignore-scripts
 pnpm --filter burrow-clock-mobile run dev
 pnpm --filter burrow-clock-mobile run typecheck
 pnpm --filter burrow-clock-mobile run lint
+pnpm --filter burrow-clock-mobile run test
 pnpm --filter burrow-clock-mobile run config:check
 pnpm --filter burrow-clock-mobile run check:dependencies
 pnpm --filter burrow-clock-mobile run bundle:check
@@ -39,7 +41,28 @@ CI require no device, simulator, native SDK, Expo account, or signing credential
 The bundle check exports iOS and Android JavaScript into the ignored `mobile/dist/`
 directory; it does not build or sign a native application.
 Expo's default Metro configuration supplies workspace support; no custom
-navigation, bundler configuration, or service layers are needed for this shell.
+navigation, bundler configuration, or service layers are needed for this preview.
+
+## Local Mobile Privacy Preview
+
+The mobile screen offers two explicitly fictional example contacts, hypothetical
+Presence/Approximate/Precise scopes, a Precise sensitivity warning and finite
+preview duration choices from 60 to 86400 seconds, inclusive. The user selects all
+settings, reviews the outgoing direction and explicitly starts a simulated session.
+No simulation runs by default. Settings are locked while running; immediate ending
+and exact expiry are supported. Another run always needs another explicit start.
+
+The app prominently says **Demo preview — not connected** and **Location sharing is
+off**. Running means only **Preview session running — no information is shared**.
+Contacts, session numbers and consent choices are synthetic and remain in memory;
+closing/restarting the app discards them. Expiry is rechecked on foreground return.
+This local model is not server authorization or an actual consent grant.
+
+No GPS, location permission, contact access, identity, network API integration,
+storage, telemetry or background workers are added. Android permissions remain
+empty. Authentication and production sharing integration are deferred. See the
+[mobile guide](mobile/README.md) for implementation details, Expo startup, tests,
+validation commands and device-testing limitations.
 
 ## Backend/API Foundation
 
@@ -198,6 +221,7 @@ after re-grant or friendship termination, and for wrong directions or scopes.
 Metadata reads grant no reusable disclosure capability.
 
 There is no friendship creation endpoint, invitation flow or mobile API connection.
+The mobile app provides only the synthetic local preview described above.
 No route collects or returns GPS, coordinates or actual presence/location data.
 Write requests forbid client-controlled actor/sharer identity, permission/session
 identities and lifecycle flags. Legitimate `recipient_user_id` UUID fields remain
@@ -218,7 +242,7 @@ the dedicated safety-validated test URL and are mandatory in CI.
 
 - Real authentication provider/token integration and users/accounts
 - Friendship invitations/requests, mutual acceptance and blocking workflows
-- Mobile sharing workflows and background expiry cleanup scheduling
+- Connected mobile sharing workflows and background expiry cleanup scheduling
 - GPS permissions, foreground location collection, and background location collection
 - Coordinates and raw coordinate persistence
 - Geofencing and presence computation

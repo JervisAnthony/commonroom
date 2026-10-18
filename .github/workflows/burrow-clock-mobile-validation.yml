@@ -80,6 +80,9 @@ jobs:
       - name: Lint
         run: pnpm --filter burrow-clock-mobile run lint
 
+      - name: Test local preview session model
+        run: pnpm --filter burrow-clock-mobile run test
+
       - name: Validate Expo configuration
         run: pnpm --filter burrow-clock-mobile run config:check
 
