@@ -1,4 +1,4 @@
-"""Configuration remains lazy, strict, product-local and health-only."""
+"""Configuration remains lazy and strict; health is public and metadata is protected."""
 import importlib
 
 from fastapi.testclient import TestClient
@@ -40,7 +40,10 @@ def test_import_and_health_require_no_database(monkeypatch):
     with TestClient(main.app) as client:
         response = client.get("/api/v1/health")
     assert response.json() == {"status": "ok", "service": "burrow-clock-api"}
-    assert {route.path for route in main.app.routes if route.path.startswith("/api/")} == {"/api/v1/health"}
+    for path, operations in main.app.openapi()["paths"].items():
+        if path.startswith("/api/") and path != "/api/v1/health":
+            for method in operations:
+                assert client.request(method.upper(), path).status_code == 401
 
 
 def test_explicit_engine_seam_and_driver(monkeypatch):

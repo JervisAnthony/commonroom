@@ -9,6 +9,7 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
+from sqlalchemy.pool import StaticPool
 
 from burrow_clock_api.infrastructure.database import create_db_engine, create_session_factory, validate_database_url
 from burrow_clock_api.infrastructure.models import Base, FriendshipModel, SharingPermissionModel, SharingSessionModel
@@ -103,7 +104,8 @@ def store(request):
     if backend == "postgres":
         engine = request.getfixturevalue("postgres_engine")
     else:
-        engine = create_engine("sqlite:///:memory:")
+        engine = create_engine("sqlite:///:memory:", poolclass=StaticPool,
+                               connect_args={"check_same_thread": False})
 
         @event.listens_for(engine, "connect")
         def foreign_keys(connection, record):

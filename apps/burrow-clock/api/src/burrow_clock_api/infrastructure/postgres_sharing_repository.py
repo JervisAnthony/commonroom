@@ -1,4 +1,4 @@
-"""Transactional product-local persistence; no public workflow or actual disclosure.
+"""Transactional product-local persistence; no actual location disclosure.
 
 All relationship-dependent lifecycle writes and active-session reads lock the
 friendship first, then permission, then session. PostgreSQL READ COMMITTED reads
@@ -12,6 +12,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, sessionmaker
 
+from burrow_clock_api.application.repositories import CurrentPermission, SharingStateConflict
 from burrow_clock_api.domain.consent import ConsentGrant, SharingScope, _require_aware, _require_scope
 from burrow_clock_api.domain.friendship import Friendship
 from burrow_clock_api.domain.session import SharingSession
@@ -134,6 +135,19 @@ class PostgresSharingRepository:
             ))
             return True
 
+    def terminate_friendship_as_member(self, friendship_id: UUID, actor_user_id: UUID) -> bool:
+        _require_uuids(friendship_id, actor_user_id)
+        with self._session_factory.begin() as session:
+            row = _lock_friendship(session, friendship_id)
+            friendship = _friendship(row)
+            if friendship is None or not friendship.contains_user(actor_user_id):
+                return False
+            row.is_active = False
+            session.execute(delete(SharingSessionModel).where(
+                SharingSessionModel.friendship_id == friendship_id
+            ))
+            return True
+
     def grant_permission(self, permission: SharingPermission) -> UUID:
         if not isinstance(permission, SharingPermission):
             raise TypeError("permission must be a SharingPermission")
@@ -208,6 +222,55 @@ class PostgresSharingRepository:
             # Leave rows bound to this revoked fact; evaluation honors the exact boundary.
             # No method clears revoked_at or reactivates an old grant.
 
+    def get_current_permission(
+        self, friendship_id: UUID, sharer_user_id: UUID, recipient_user_id: UUID,
+    ) -> CurrentPermission | None:
+        _require_uuids(friendship_id, sharer_user_id, recipient_user_id)
+        with self._session_factory.begin() as session:
+            friendship = _friendship(_lock_friendship(session, friendship_id))
+            if friendship is None or not friendship.connects(sharer_user_id, recipient_user_id):
+                return None
+            row = _current_permission(session, friendship_id, sharer_user_id, recipient_user_id)
+            permission = _permission(row, session)
+            return CurrentPermission(row.permission_id, permission) if permission is not None else None
+
+    def revoke_permission_as_sharer(
+        self, permission_id: UUID, actor_user_id: UUID, at: datetime,
+    ) -> bool:
+        _require_uuids(permission_id, actor_user_id)
+        at = _utc(at)
+        with self._session_factory.begin() as session:
+            # Parent discovery is not authorization; locked facts below decide access.
+            friendship_id = session.scalar(select(SharingPermissionModel.friendship_id).where(
+                SharingPermissionModel.permission_id == permission_id
+            ))
+            if friendship_id is None:
+                return False
+            friendship = _friendship(_lock_friendship(session, friendship_id))
+            row = session.scalars(select(SharingPermissionModel).where(
+                SharingPermissionModel.permission_id == permission_id
+            ).with_for_update()).first()
+            permission = _permission(row, session)
+            if (
+                friendship is None or permission is None
+                or permission.sharer_user_id != actor_user_id
+                or not friendship.connects(actor_user_id, permission.recipient_user_id)
+            ):
+                return False
+            if row.revoked_at is not None:
+                raise SharingStateConflict("consent cannot be revoked in its current state")
+            if at < permission.grant.granted_at:
+                # Withdraw pending consent immediately without inventing a revocation
+                # time at/after activation. Historical grants never become current again.
+                row.is_current = False
+                session.flush()
+                session.execute(delete(SharingSessionModel).where(
+                    SharingSessionModel.permission_id == permission_id
+                ))
+                return True
+            row.revoked_at = at
+            return True
+
     def start_session(
         self, friendship_id: UUID, sharer_user_id: UUID, recipient_user_id: UUID,
         requested_scope: SharingScope, started_at: datetime, expires_at: datetime,
@@ -224,7 +287,7 @@ class PostgresSharingRepository:
             ):
                 raise ValueError("session requires active friendship and valid directional consent")
             if permission.grant.expires_at is not None and expires_at > permission.grant.expires_at:
-                raise ValueError("session cannot outlive consent expiry")
+                raise SharingStateConflict("session cannot outlive consent expiry")
             value = SharingSession(uuid4(), friendship_id, row.permission_id,
                                    requested_scope, started_at, expires_at)
             session.add(SharingSessionModel(
@@ -287,6 +350,34 @@ class PostgresSharingRepository:
             return session.execute(delete(SharingSessionModel).where(
                 SharingSessionModel.session_id == session_id
             )).rowcount == 1
+
+    def end_session_as_sharer(self, session_id: UUID, actor_user_id: UUID) -> bool:
+        _require_uuids(session_id, actor_user_id)
+        with self._session_factory.begin() as session:
+            # Discover both parents, then re-read the locked session after locking them.
+            parent = session.execute(select(
+                SharingSessionModel.friendship_id, SharingSessionModel.permission_id,
+            ).where(SharingSessionModel.session_id == session_id)).first()
+            if parent is None:
+                return False
+            friendship = _friendship(_lock_friendship(session, parent.friendship_id))
+            permission_row = session.scalars(select(SharingPermissionModel).where(
+                SharingPermissionModel.permission_id == parent.permission_id
+            ).with_for_update()).first()
+            row = session.scalars(select(SharingSessionModel).where(
+                SharingSessionModel.session_id == session_id
+            ).with_for_update()).first()
+            if (
+                friendship is None or permission_row is None or row is None
+                or permission_row.sharer_user_id != actor_user_id
+                or not friendship.connects(actor_user_id, permission_row.recipient_user_id)
+                or row.friendship_id != friendship.friendship_id
+                or permission_row.friendship_id != row.friendship_id
+                or row.permission_id != permission_row.permission_id
+            ):
+                return False
+            session.delete(row)
+            return True
 
     def cleanup_expired_sessions(self, at: datetime) -> int:
         at = _utc(at)

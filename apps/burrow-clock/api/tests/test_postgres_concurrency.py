@@ -2,7 +2,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import timedelta
-from threading import Barrier, Event, current_thread
+from threading import Barrier, Event, current_thread, local
 from uuid import uuid4
 
 import pytest
@@ -126,3 +126,94 @@ def test_concurrent_sessions_and_regrants_have_unambiguous_binding(live_store, p
         assert session.scalars(select(SharingSessionModel)).all() == []
     for value in sessions:
         assert repo.get_active_session(value.session_id, *participants[:2], SharingScope.PRESENCE, instant) is None
+
+
+@pytest.mark.parametrize("transition", ["revoke", "terminate", "end", "regrant", "cancel"])
+def test_http_facing_mutations_serialize_authorization_with_contenders(
+    live_store, participants, instant, transition,
+):
+    """Real actor-aware methods hold the parent lock through authorization and commit.
+
+    After revocation/termination a waiting session create denies; after ending a
+    waiting recipient read denies. Replacing consent invalidates a stale revoke
+    precheck without touching the newly current grant. Pending cancellation denies
+    a queued session start even when it evaluates the future activation instant.
+    """
+    from burrow_clock_api.domain.consent import ConsentGrant
+    from burrow_clock_api.domain.sharing import SharingPermission
+
+    repo, factory, engine = live_store
+    sharer, recipient = participants[:2]
+    friendship = repo.create_friendship(Friendship(uuid4(), sharer, recipient))
+    activation = instant + timedelta(hours=1) if transition == "cancel" else instant
+    permission = SharingPermission(friendship.friendship_id, sharer, recipient,
+                                   ConsentGrant(SharingScope.PRESENCE, activation))
+    identity = repo.grant_permission(permission)
+    value = repo.start_session(friendship.friendship_id, sharer, recipient,
+                              SharingScope.PRESENCE, activation, activation + timedelta(minutes=1))
+    precheck = repo.get_current_permission(friendship.friendship_id, sharer, recipient)
+    assert precheck.permission_id == identity
+    writer_locked, contender_waiting, release_writer = Event(), Event(), Event()
+    role = local()
+
+    def before(connection, cursor, statement, parameters, context, executemany):
+        if getattr(role, "name", None) == "contender" and "friendships" in statement and "FOR UPDATE" in statement:
+            contender_waiting.set()
+
+    def after(connection, cursor, statement, parameters, context, executemany):
+        if getattr(role, "name", None) == "writer" and "friendships" in statement and "FOR UPDATE" in statement:
+            writer_locked.set()
+            assert release_writer.wait(10), "writer release was not signaled"
+
+    def write():
+        role.name = "writer"
+        if transition == "revoke": return repo.revoke_permission_as_sharer(identity, sharer, instant)
+        if transition == "cancel": return repo.revoke_permission_as_sharer(identity, sharer, instant)
+        if transition == "terminate": return repo.terminate_friendship_as_member(friendship.friendship_id, sharer)
+        if transition == "end": return repo.end_session_as_sharer(value.session_id, sharer)
+        return repo.grant_permission(permission)
+
+    def contend():
+        role.name = "contender"
+        if transition == "end":
+            return repo.get_active_session(value.session_id, sharer, recipient, SharingScope.PRESENCE, instant)
+        if transition == "regrant":
+            return repo.revoke_permission_as_sharer(precheck.permission_id, sharer, instant)
+        try:
+            repo.start_session(friendship.friendship_id, sharer, recipient, SharingScope.PRESENCE,
+                               activation, activation + timedelta(minutes=1))
+        except ValueError:
+            return "denied"
+        raise AssertionError("session creation survived a committed privacy transition")
+
+    event.listen(engine, "before_cursor_execute", before)
+    event.listen(engine, "after_cursor_execute", after)
+    try:
+        with ThreadPoolExecutor(max_workers=2) as workers:
+            try:
+                writer = workers.submit(write)
+                assert writer_locked.wait(10)
+                contender = workers.submit(contend)
+                assert contender_waiting.wait(10)
+                assert not contender.done()
+            finally:
+                release_writer.set()
+            written = writer.result(timeout=10)
+            result = contender.result(timeout=10)
+        if transition == "end":
+            assert written is True and result is None
+        elif transition == "regrant":
+            assert written != identity and result is False
+            with factory() as session:
+                assert session.get(SharingPermissionModel, written).revoked_at is None
+        else:
+            assert written is True and result == "denied"
+            if transition == "cancel":
+                with factory() as session:
+                    row = session.get(SharingPermissionModel, identity)
+                    assert not row.is_current and row.revoked_at is None
+                    assert session.get(SharingSessionModel, value.session_id) is None
+    finally:
+        release_writer.set()
+        event.remove(engine, "before_cursor_execute", before)
+        event.remove(engine, "after_cursor_execute", after)
