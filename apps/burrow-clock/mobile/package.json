@@ -12,6 +12,7 @@
     "ios": "expo start --ios",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings 0",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "config:check": "expo config --type public",
     "check:dependencies": "expo install --check",
     "bundle:check": "expo export --platform ios --platform android --output-dir dist"
