@@ -1,0 +1,20 @@
+[project]
+name = "pensieve-api"
+version = "0.1.0"
+description = "Pensieve independent FastAPI backend foundation"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.141.1",
+    "pydantic>=2.0",
+    "uvicorn>=0.52.4",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+]
