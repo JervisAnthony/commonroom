@@ -105,6 +105,73 @@ statement a verified canonical fact. Roleplay is declared generated content and
 must remain distinguishable from sourced lore; these contracts do not detect
 mislabeling of prose or verify the caller's assertions.
 
+## Source registry and reference resolution
+
+`pensieve_api.domain.source_registry` adds `RegisteredSource`, `SourceRegistry`,
+`ResolutionStatus`, `ReferenceResolution` and `ClaimResolution` locally to Pensieve.
+`RegisteredSource` requires nonblank `source_id` and `title`, the existing
+`CanonTier` and a nonempty strict list of existing `SourceLocator` values. Unknown
+fields, malformed types and duplicate locator kind/reference pairs are rejected.
+It shares the provenance contracts' trimming and exact tier/kind semantics.
+
+Construct `SourceRegistry` with a finite collection of `RegisteredSource` objects.
+An empty collection is valid; duplicate normalized source IDs are rejected.
+Construction revalidates and snapshots mutable models into immutable metadata.
+There is no global instance, seeded data, storage, network or external service.
+Changing caller-owned models or result references cannot change registry entries;
+construct a new registry to change registrations. The typed Python results are
+internal objects, with no additional API routes or OpenAPI schemas.
+
+`resolve_reference` returns a `ReferenceResolution` with an independent `reference`
+snapshot and a `status`, using this precedence:
+
+1. `SOURCE_NOT_REGISTERED`: the source ID is absent.
+2. `SOURCE_METADATA_MISMATCH`: the ID exists but title or canon tier differs.
+3. `LOCATOR_NOT_REGISTERED`: metadata matches but the locator kind/reference pair is absent.
+4. `REGISTRY_MATCH`: all supplied metadata matches a registered entry.
+
+Comparisons are exact after existing contract normalization: no fuzzy matching,
+case folding, aliases or URL retrieval. `resolve_claim` accepts `SourcedLoreClaim`
+only (rejecting `GeneratedRoleplay`), returns a `ClaimResolution` whose `references`
+tuple preserves input order and duplicates, and exposes `all_references_registered`.
+The aggregate is true only when every reference matches. Inputs are not mutated.
+
+Using the entirely fictional `claim` from the earlier example:
+
+```python
+from pensieve_api.domain.source_registry import (
+    RegisteredSource, ResolutionStatus, SourceRegistry,
+)
+
+registered = RegisteredSource(
+    source_id="synthetic-atlas",
+    title="The Imaginary Lantern Atlas",
+    canon_tier="book",
+    locators=[{"kind": "chapter", "reference": "3"}],
+)
+registry = SourceRegistry([registered])
+result = registry.resolve_reference(claim.sources[0])
+assert result.status is ResolutionStatus.REGISTRY_MATCH
+outcomes = registry.resolve_claim(claim)
+assert outcomes.all_references_registered
+assert outcomes.references[0] == result
+assert SourceRegistry([]).resolve_reference(claim.sources[0]).status is ResolutionStatus.SOURCE_NOT_REGISTERED
+```
+
+These guarantees are distinct:
+
+- **Structural validation** checks required fields, types and declared values.
+- **Registry metadata matching** compares those declarations to supplied records.
+- **Source authenticity verification** would establish a source's genuineness; it
+  is not implemented.
+- **Claim-support verification** would assess whether a source supports a statement;
+  it is not implemented.
+
+A match does not establish lawful acquisition, passage existence outside the
+registry, authenticity, statement support, canonical status or factual correctness.
+The statement is never evaluated. Callers remain responsible for original wording
+and lawful source metadata.
+
 ## Boundaries and deferred work
 
 Pensieve imports no Hogwarts Trials or Burrow Clock internals. Its contracts remain
