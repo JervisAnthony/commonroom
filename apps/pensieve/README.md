@@ -41,6 +41,33 @@ support for a claim. An attributed claim is not automatically a verified canonic
 fact. Generated roleplay remains explicitly distinguishable from sourced lore.
 These models add no API routes or OpenAPI schemas.
 
+## Source registry and reference resolution
+
+`RegisteredSource` declares a source ID, title, existing canon tier and a nonempty
+list of unique locators. `SourceRegistry` snapshots an explicitly supplied finite
+collection (which may be empty); it has no automatic records or persistence.
+Duplicate IDs and duplicate normalized locator pairs are rejected.
+
+Reference resolution compares source ID, title/tier, then locator kind/reference,
+in that order. Outcomes are `SOURCE_NOT_REGISTERED`, `SOURCE_METADATA_MISMATCH`,
+`LOCATOR_NOT_REGISTERED` or `REGISTRY_MATCH`. Comparisons are exact after contract
+whitespace trimming, without case folding, aliases or retrieval.
+Claim resolution preserves every reference, including order and duplicates, and
+reports `all_references_registered`; generated roleplay is rejected.
+
+For example, registering the synthetic atlas above with chapter `3` allows its
+matching reference to return `REGISTRY_MATCH`. Changing its chapter to `4` returns
+`LOCATOR_NOT_REGISTERED`. See the [executable example](api/README.md#source-registry-and-reference-resolution).
+
+Structural validation checks the shape of supplied metadata. Registry matching
+checks that metadata against caller-registered entries. Source authenticity
+verification would establish whether a source is genuine; claim-support
+verification would assess whether it supports the statement. Only the first two
+are implemented. A registry match proves neither authenticity, lawful acquisition,
+external passage existence, claim support nor canonical or factual correctness.
+The registry uses immutable stored metadata and independent result snapshots;
+caller mutations cannot change registered entries. No API routes are added.
+
 The product scope above describes future intentions. AI, retrieval, embeddings,
 citation verification, streaming, news ingestion, persistence, authentication, accounts and a
 web frontend remain deferred. Pensieve cannot yet answer lore questions.
