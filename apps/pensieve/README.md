@@ -68,6 +68,42 @@ external passage existence, claim support nor canonical or factual correctness.
 The registry uses immutable stored metadata and independent result snapshots;
 caller mutations cannot change registered entries. No API routes are added.
 
+## Versioned curated source catalog
+
+Pensieve-local `CatalogEntry` pairs an existing `RegisteredSource` with a required
+original nonblank `curation_note` and an exact `proposed` or `metadata_reviewed`
+status. `SourceCatalog` requires integer `schema_version=1`, a nonblank
+`catalog_id` and an explicit ordered `entries` list. Empty catalogs are valid;
+unknown versions, unexpected fields, invalid nested metadata and duplicate
+normalized source IDs across all statuses are rejected.
+
+`proposed` entries remain in the catalog but cannot appear in registry matches.
+`metadata_reviewed` means only that the author declared matching eligibility.
+It establishes neither independent human review, authenticity, licensing, lawful
+acquisition, canonical authority, factual accuracy nor support for any claim.
+Structural validity never promotes a proposal.
+
+Explicitly call `build_registry()` to revalidate the whole catalog and snapshot
+only eligible sources into the existing `SourceRegistry`. Empty or all-proposed
+catalogs create empty registries. Later metadata, status and locator changes do
+not alter existing snapshots; construct a new registry to apply changes. Catalog
+construction and registration add no routes or OpenAPI changes and evaluate no
+source content or claims.
+
+Pydantic `model_validate_json()`, `model_dump(mode="json")` and
+`model_dump_json()` support parsing and deterministic serialization. The
+[version 1 synthetic catalog](api/examples/synthetic_catalog.v1.json) contains
+an eligible fictional book and a proposed fictional film. It is an example,
+not an automatically trusted or loaded production catalog. See the
+[executable catalog example and curation policy](api/README.md#versioned-curated-source-catalog).
+No import or startup loading, file discovery, external I/O or configuration is added.
+
+Contributors must keep IDs unique, supply original metadata and notes rather than
+licensed passages, and explicitly review metadata changes before inclusion in a
+new curated catalog revision. Keep proposals excluded until eligibility is
+declared. Registration differs from factual verification: source authenticity
+and claim-support verification remain explicitly deferred.
+
 The product scope above describes future intentions. AI, retrieval, embeddings,
 citation verification, streaming, news ingestion, persistence, authentication, accounts and a
 web frontend remain deferred. Pensieve cannot yet answer lore questions.

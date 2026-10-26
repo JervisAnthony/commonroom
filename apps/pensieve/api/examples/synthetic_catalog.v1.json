@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "catalog_id": "synthetic-lantern-catalog-v1",
+  "entries": [
+    {
+      "source": {
+        "source_id": "synthetic-moonseed-atlas",
+        "title": "The Moonseed Lantern Atlas",
+        "canon_tier": "book",
+        "locators": [{"kind": "chapter", "reference": "3"}]
+      },
+      "curation_status": "metadata_reviewed",
+      "curation_note": "The example author declares this invented metadata eligible for matching; no source content has been verified."
+    },
+    {
+      "source": {
+        "source_id": "synthetic-paper-tide-film",
+        "title": "The Paper Tide Observatory",
+        "canon_tier": "film",
+        "locators": [{"kind": "scene", "reference": "2"}]
+      },
+      "curation_status": "proposed",
+      "curation_note": "This invented film registration awaits an explicit eligibility decision and must remain excluded from matching."
+    }
+  ]
+}

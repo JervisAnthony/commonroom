@@ -172,6 +172,86 @@ registry, authenticity, statement support, canonical status or factual correctne
 The statement is never evaluated. Callers remain responsible for original wording
 and lawful source metadata.
 
+## Versioned curated source catalog
+
+`pensieve_api.domain.source_catalog` defines strict Pydantic v2 contracts:
+
+- `CatalogEntry`: required `source` (the existing `RegisteredSource`), exact
+  `curation_status` (`proposed` or `metadata_reviewed`), and nonblank original
+  `curation_note`.
+- `SourceCatalog`: required integer `schema_version=1`, nonblank `catalog_id`,
+  and explicit `entries` list (which may be empty). Unknown versions, unknown
+  fields, invalid nested metadata and duplicate normalized source IDs across
+  all statuses are rejected. Entry ordering is preserved; IDs are trimmed and
+  compared exactly, without case folding.
+
+`proposed` preserves supplied metadata without eligibility for matching.
+`metadata_reviewed` means only that the catalog author declared the entry eligible
+for registry matching. It does not establish actual independent human review,
+authenticity, licensing, lawful acquisition, canonical authority, factual accuracy
+or whether the source supports any lore statement. Structural validity never
+automatically promotes an entry.
+
+Call `catalog.build_registry()` explicitly. It revalidates the entire mutable
+catalog before selecting only `metadata_reviewed` entries for the existing
+`SourceRegistry`. Empty and all-proposed catalogs produce empty registries.
+Construction leaves the catalog unchanged. Each registry is an independent
+snapshot: subsequent changes to metadata, statuses or nested locators cannot
+change an existing registry. Construct another registry to apply new declarations.
+Matching and claim-resolution semantics remain unchanged; no claim-verification
+result is produced.
+
+The [synthetic version 1 example](examples/synthetic_catalog.v1.json) contains
+one eligible fictional book and one proposed fictional film. It is demonstration
+data, not a trusted production catalog. No catalog is discovered or loaded at
+import or startup; there is no global registry, file scanning, retrieval, storage,
+new configuration or external I/O.
+
+Run this example from the repository root in the configured API environment.
+The caller explicitly chooses to read the example file:
+
+```python
+from pathlib import Path
+from pensieve_api.domain.provenance import SourceReference
+from pensieve_api.domain.source_catalog import SourceCatalog
+from pensieve_api.domain.source_registry import ResolutionStatus
+
+payload = Path("apps/pensieve/api/examples/synthetic_catalog.v1.json").read_text(
+    encoding="utf-8",
+)
+catalog = SourceCatalog.model_validate_json(payload)
+assert SourceCatalog.model_validate_json(catalog.model_dump_json()) == catalog
+assert SourceCatalog.model_validate(catalog.model_dump(mode="json")) == catalog
+registry = catalog.build_registry()
+reference = SourceReference(
+    source_id="synthetic-moonseed-atlas",
+    title="The Moonseed Lantern Atlas",
+    canon_tier="book",
+    locator={"kind": "chapter", "reference": "3"},
+)
+assert registry.resolve_reference(reference).status is ResolutionStatus.REGISTRY_MATCH
+```
+
+Repeated Pydantic JSON serialization of unchanged data is deterministic. Python
+construction with nested dictionaries or model objects is also supported.
+
+For future contributions:
+
+- Keep every source ID unique across the catalog, including proposed entries.
+- Supply valid metadata, locators and original explanatory notes. Include no
+  reproduced licensed source passages.
+- Preserve proposals as `proposed` until an explicit eligibility decision is
+  recorded; never infer review from successful validation.
+- Explicitly review metadata changes before including them in a new curated
+  catalog version. `schema_version` describes the document format; use a distinct
+  `catalog_id` for a new curated catalog revision under that format.
+- Build a new registry for changed declarations; existing registries remain
+  independent snapshots.
+
+Catalog registration controls eligibility for metadata matching. It performs no
+automatic content verification. Source authenticity and claim-support verification
+remain explicitly deferred, as do licensing and canonical-authority assessments.
+
 ## Boundaries and deferred work
 
 Pensieve imports no Hogwarts Trials or Burrow Clock internals. Its contracts remain
