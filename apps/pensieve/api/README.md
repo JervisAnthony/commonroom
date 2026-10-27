@@ -252,6 +252,109 @@ Catalog registration controls eligibility for metadata matching. It performs no
 automatic content verification. Source authenticity and claim-support verification
 remain explicitly deferred, as do licensing and canonical-authority assessments.
 
+## Catalog revision comparison and acknowledgment
+
+`pensieve_api.domain.catalog_governance` provides three explicit Python operations:
+
+- `compare_catalogs(previous, candidate) -> CatalogComparison` revalidates both
+  complete `SourceCatalog` objects from fresh dumps, including proposed entries.
+- `acknowledge_catalog_changes(comparison) -> CatalogAcknowledgment` records a
+  caller declaration covering the complete transition.
+- `build_registry_for_revision(previous, candidate, acknowledgment=None)` recomputes
+  the comparison, enforces the revision policy, then builds the existing registry
+  from the same validated candidate snapshot. Only eligible entries are included.
+
+The operations reject unrelated input types with `TypeError`. Invalid mutated
+catalogs retain Pydantic validation errors; missing or mismatched acknowledgment
+and changed replacements with the same normalized `catalog_id` raise `ValueError`.
+Every full-document change requires acknowledgment and a distinct catalog ID,
+including ID-only, note-only, proposed-only and ordering changes. Comparison still
+reports same-ID edits so they can be inspected. Identical normalized documents
+need neither acknowledgment nor a new ID. Any supplied acknowledgment is checked
+even for an unchanged transition.
+
+`CatalogComparison` contains canonical `previous_document` and `candidate_document`
+JSON strings, `previous_entry_order`, `candidate_entry_order`, and `source_changes`.
+Each `SourceChange` has a `source_id`, optional `before`/`after` `EntrySnapshot`
+(absence means addition/removal), and sorted `added_locators`/`removed_locators`.
+Snapshots expose ID, title, tier, ordered locator pairs, status and note. Source-ID
+edits are removal plus addition; no rename inference occurs. Source changes sort
+by exact normalized ID, locator deltas by kind then reference. Snapshots preserve
+entry and locator sequences. Existing whitespace trimming applies, with no case
+folding, aliases, Unicode normalization or locator interpretation.
+
+`has_changes` compares the complete normalized documents, including schema version,
+catalog ID, all metadata, notes, statuses and ordering. `registry_metadata_changed`
+instead compares eligible source IDs, titles, tiers and locator membership.
+`eligibility_added` and `eligibility_removed` distinguish sources entering/leaving
+the eligible set from `eligible_metadata_changed`, which lists matching-metadata
+edits within sources that remain eligible. All three are sorted ID tuples.
+Proposed-only edits, notes, catalog IDs and sequence reordering have no matching
+effect. Locator kind/reference edits remove one pair and add another.
+
+Bindings use complete normalized JSON with sorted object keys, ASCII escapes and
+fixed compact separators, preserving every list's order. An acknowledgment for
+A -> B fails for A -> C, X -> B, B -> A, or any intervening valid document edit,
+even if catalog IDs are reused. Equivalent reconstructed normalized documents
+are accepted, and reuse for the exact same pair is allowed. Acknowledgment is
+never automatic, consumed, or reduced to a boolean flag or changed-source list.
+
+Comparison results and acknowledgments are frozen dataclasses containing only
+deeply immutable snapshots, tuples and scalars. Caller mutations cannot change
+existing results or registries. For deterministic report JSON, use
+`json.dumps(dataclasses.asdict(report), sort_keys=True, ensure_ascii=True,
+separators=(",", ":"))`; properties are inspected separately. This is a Python
+serialization path, not another versioned public wire schema.
+
+This self-contained synthetic example performs no file loading:
+
+```python
+from dataclasses import asdict
+import json
+from pensieve_api.domain.catalog_governance import (
+    compare_catalogs, acknowledge_catalog_changes, build_registry_for_revision,
+)
+from pensieve_api.domain.source_catalog import SourceCatalog
+from pensieve_api.domain.provenance import SourceReference
+from pensieve_api.domain.source_registry import ResolutionStatus
+
+previous = SourceCatalog(schema_version=1, catalog_id="synthetic-revision-a", entries=[])
+candidate = SourceCatalog(schema_version=1, catalog_id="synthetic-revision-b", entries=[{
+    "source": {
+        "source_id": "synthetic-paper-atlas", "title": "The Folded Lantern Atlas",
+        "canon_tier": "book", "locators": [{"kind": "chapter", "reference": "1"}],
+    },
+    "curation_status": "metadata_reviewed",
+    "curation_note": "The author declares this invented metadata eligible for matching.",
+}])
+report = compare_catalogs(previous, candidate)
+print(json.dumps(asdict(report), sort_keys=True, ensure_ascii=True, separators=(",", ":")))
+assert report.has_changes and report.registry_metadata_changed
+assert report.eligibility_added == ("synthetic-paper-atlas",)
+# The caller inspects the report and explicitly declares acknowledgment.
+acknowledgment = acknowledge_catalog_changes(report)
+registry = build_registry_for_revision(previous, candidate, acknowledgment)
+reference = SourceReference(
+    source_id="synthetic-paper-atlas", title="The Folded Lantern Atlas", canon_tier="book",
+    locator={"kind": "chapter", "reference": "1"},
+)
+assert registry.resolve_reference(reference).status is ResolutionStatus.REGISTRY_MATCH
+```
+
+Structural validity checks document shape. Declared eligibility selects sources.
+Registry matching compares metadata. Acknowledgment declares acceptance of a
+particular change; it proves no inspection and does not identify or authorize a
+reviewer. Authenticated approval, source authenticity, licensing and substantive
+claim support remain outside this workflow. No lore statement is evaluated.
+
+Enforcement is opt-in: the unchanged `SourceCatalog.build_registry()` remains
+available. The caller supplies the previous catalog; this cannot establish that
+it is currently adopted or latest. There is no universal governance enforcement,
+persistent adoption, global freshness, tamper-proof audit history, signatures or
+protection against hostile in-process Python code. No endpoints, configuration,
+filesystem loading, databases or external I/O are added. Fresh-process audit-hook
+tests guard against accidental I/O regressions; they are not an OS sandbox.
+
 ## Boundaries and deferred work
 
 Pensieve imports no Hogwarts Trials or Burrow Clock internals. Its contracts remain

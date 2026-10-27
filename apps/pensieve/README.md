@@ -104,6 +104,51 @@ new curated catalog revision. Keep proposals excluded until eligibility is
 declared. Registration differs from factual verification: source authenticity
 and claim-support verification remain explicitly deferred.
 
+## Catalog revision comparison and acknowledgment
+
+The Pensieve-local operations `compare_catalogs(previous, candidate)`,
+`acknowledge_catalog_changes(comparison)` and
+`build_registry_for_revision(previous, candidate, acknowledgment=None)` offer an
+opt-in replacement workflow. Both complete catalogs are revalidated from fresh
+dumps, including proposals. The registry is built from the same validated candidate
+snapshot, with proposed sources excluded and existing resolution behavior preserved.
+
+Frozen `CatalogComparison`, `SourceChange`, `EntrySnapshot` and
+`CatalogAcknowledgment` dataclasses retain deeply immutable values. Reports contain
+complete normalized document JSON, entry order, before/after source snapshots and
+locator membership deltas. Source changes sort by exact normalized ID; locator
+deltas sort by kind/reference. Snapshots retain sequence order. Existing trimming
+and case-sensitive matching apply. Source-ID edits are removal plus addition.
+
+`has_changes` covers the whole document, including catalog ID, notes, proposals
+and ordering. `registry_metadata_changed` covers only eligible IDs, titles, tiers
+and locator membership. `eligibility_added`/`eligibility_removed` distinguish
+membership changes from `eligible_metadata_changed` within sources remaining
+eligible. Notes, proposed-only edits, ID-only edits and reordering have no matching
+effect. Deterministic JSON uses `dataclasses.asdict` with sorted keys and fixed
+separators; see the [executable example](api/README.md#catalog-revision-comparison-and-acknowledgment)
+for compare, inspect, explicitly acknowledge, then build.
+
+Every document change requires acknowledgment and a distinct normalized
+`catalog_id`. Same-ID edits remain reportable but guarded construction rejects
+them. Identical normalized documents need neither a new ID nor acknowledgment.
+Missing or mismatched acknowledgment fails; a supplied acknowledgment is checked
+even for no-change. Bindings include both complete normalized documents, so reused
+IDs cannot conceal intervening changes. Equivalent reconstructed documents and
+exact-pair acknowledgment reuse are allowed; nothing is consumed. Caller mutations
+cannot alter existing comparison, acknowledgment or registry snapshots.
+
+Structural validity, author-declared eligibility, registry metadata matching and
+acknowledgment of a change are separate guarantees. Acknowledgment proves no
+inspection, reviewer identity, authorization, licensing, source authenticity or
+substantive claim support. Authenticated approval is not implemented.
+The unchanged direct `SourceCatalog.build_registry()` remains available. The caller
+supplies the baseline, so this provides no universal enforcement, persistent
+adoption, authoritative latest revision, global freshness, tamper-proof audit trail
+or protection against hostile in-process Python code. It adds no external I/O,
+configuration, endpoints or OpenAPI schemas. Source authenticity and claim-support
+verification remain deferred.
+
 The product scope above describes future intentions. AI, retrieval, embeddings,
 citation verification, streaming, news ingestion, persistence, authentication, accounts and a
 web frontend remain deferred. Pensieve cannot yet answer lore questions.
