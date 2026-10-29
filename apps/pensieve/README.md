@@ -149,7 +149,57 @@ or protection against hostile in-process Python code. It adds no external I/O,
 configuration, endpoints or OpenAPI schemas. Source authenticity and claim-support
 verification remain deferred.
 
-The product scope above describes future intentions. AI, retrieval, embeddings,
+## Local source passages and exact lookup
+
+`SourcePassage` requires `kind="source_passage"`, nonblank `passage_id`, an existing
+`SourceReference` in `reference`, and nonblank `text`. This strict Pydantic v2
+record rejects extra fields and unrelated content kinds and supports Python and
+JSON validation/round trips. The discriminator is a caller declaration, not a
+detector of fabricated or mislabeled prose. Outer whitespace is trimmed; interior
+whitespace and non-ASCII text are preserved, without claiming byte-for-byte
+fidelity to an external publication.
+
+Construct `PassageStore(registry, passages)` with an existing `SourceRegistry` and
+an explicit ordered finite sequence of `SourcePassage` objects (lists and tuples
+are supported, including empty ones). Complete records are revalidated, and each
+reference must resolve to `REGISTRY_MATCH`; incompatible records raise `ValueError`
+identifying the passage and resolution status. Duplicate normalized passage IDs
+are rejected, case-distinct IDs are allowed, and distinct IDs may share a reference
+and identical text.
+
+`lookup_reference(reference)` accepts an existing `SourceReference`, revalidates
+it and resolves registry metadata first. The frozen `PassageLookup` contains the
+existing `status` and an ordered `passages` tuple. `SOURCE_NOT_REGISTERED`,
+`SOURCE_METADATA_MISMATCH` and `LOCATOR_NOT_REGISTERED` return no passages, with
+the registry's existing precedence. `REGISTRY_MATCH` returns all exact matches in
+construction order, or an empty tuple for registered citations with no stored
+text. Complete source ID, title, canon tier and locator kind/reference must match
+after trimming, case-sensitively, without aliases, search or locator interpretation.
+
+Inputs remain unchanged. Serialized validated records isolate the store from
+caller collection and model mutations. Each lookup returns fresh independent
+passage and nested reference copies. The outer result is frozen; its nested
+Pydantic snapshots remain mutable. Editing one cannot affect another or the store.
+
+The store belongs to its supplied registry snapshot. Later catalog edits or
+replacement do not update or invalidate it. Explicitly build another registry
+(including through `build_registry_for_revision()`) and a new store to apply a
+revision; retained incompatible passages fail construction after source removal,
+demotion, metadata changes or locator removal. Governance remains unchanged; the
+store establishes no catalog revision identity, adoption or global freshness.
+
+Structural validity, declared eligibility, registry agreement and available text
+remain separate from authenticity/fidelity and substantive claim support. Text
+availability only means a caller supplied text at a matching declared citation;
+it proves no external passage existence, genuineness, lawful acquisition,
+canonical status or claim support. No prose is evaluated. Generated roleplay
+remains separate. Tests and examples use original synthetic text and fictional
+metadata; do not add copyrighted franchise passages or scraped datasets.
+
+See the [executable synthetic example](api/README.md#local-source-passages-and-exact-lookup).
+No loaders, global store, external I/O or new endpoints are introduced.
+
+The product scope above describes future intentions. AI, semantic retrieval, embeddings,
 citation verification, streaming, news ingestion, persistence, authentication, accounts and a
 web frontend remain deferred. Pensieve cannot yet answer lore questions.
 

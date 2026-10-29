@@ -355,11 +355,109 @@ protection against hostile in-process Python code. No endpoints, configuration,
 filesystem loading, databases or external I/O are added. Fresh-process audit-hook
 tests guard against accidental I/O regressions; they are not an OS sandbox.
 
+## Local source passages and exact lookup
+
+`pensieve_api.domain.source_passages` defines:
+
+- `SourcePassage`: required `kind="source_passage"`, nonblank `passage_id`, existing
+  `SourceReference` in `reference`, and nonblank `text`. The strict Pydantic v2
+  model forbids extra fields, rejects unrelated content kinds, and supports Python
+  construction, `model_validate()`, JSON validation and JSON round trips.
+- `PassageStore(registry: SourceRegistry, passages: Sequence[SourcePassage])`:
+  explicit ordered finite input (including empty lists/tuples). Mappings, strings,
+  iterators and unrelated records are rejected. Every complete record, including
+  nested references, is revalidated from a fresh dump. Duplicate normalized IDs
+  raise `ValueError`; IDs compare case-sensitively. Distinct IDs may share the same
+  reference and identical text. Each reference must resolve through the public
+  registry operation to `REGISTRY_MATCH`; otherwise construction raises
+  `ValueError` identifying the passage and existing resolution status.
+- `lookup_reference(reference: SourceReference) -> PassageLookup`: revalidates
+  the mutable reference and resolves registry metadata first. Wrong operation
+  input types raise `TypeError`; malformed mutable state raises validation errors.
+- Frozen dataclass `PassageLookup(status: ResolutionStatus,
+  passages: tuple[SourcePassage, ...])`: `SOURCE_NOT_REGISTERED`,
+  `SOURCE_METADATA_MISMATCH`, then `LOCATOR_NOT_REGISTERED` retain that precedence
+  and return empty tuples. `REGISTRY_MATCH` returns all matching passages in input
+  order, or an empty tuple when the citation is registered but no text is stored.
+
+Matching includes complete source ID, title, tier and locator kind/reference.
+Existing whitespace trimming applies to IDs, metadata and text; interior text
+whitespace and non-ASCII characters are preserved. Comparisons remain exact and
+case-sensitive, without aliases, fuzzy matching, text search, ranking or locator
+interpretation. Trimming is not byte-for-byte fidelity to an external publication.
+
+Inputs remain unchanged. The store owns serialized validated records and retains
+the supplied registry as its metadata snapshot dependency. Caller collection,
+passage and nested reference mutations cannot change stored records. Each lookup
+returns fresh independent Pydantic copies, including nested references. The outer
+result is frozen, but its nested snapshots are mutable; editing one cannot change
+another passage, lookup, stored record or the registry.
+
+Run this self-contained synthetic example in the configured API environment;
+it loads no files and performs no external I/O:
+
+```python
+from pensieve_api.domain.provenance import SourceReference
+from pensieve_api.domain.source_catalog import SourceCatalog
+from pensieve_api.domain.source_passages import PassageStore, SourcePassage
+from pensieve_api.domain.source_registry import ResolutionStatus
+
+catalog = SourceCatalog(schema_version=1, catalog_id="synthetic-local-v1", entries=[{
+    "source": {
+        "source_id": "synthetic-paper-atlas", "title": "The Folded Lantern Atlas",
+        "canon_tier": "book", "locators": [
+            {"kind": "chapter", "reference": "1"},
+            {"kind": "chapter", "reference": "2"},
+        ],
+    },
+    "curation_status": "metadata_reviewed",
+    "curation_note": "An original fictional metadata eligibility declaration.",
+}])
+registry = catalog.build_registry()
+reference = SourceReference(
+    source_id="synthetic-paper-atlas", title="The Folded Lantern Atlas", canon_tier="book",
+    locator={"kind": "chapter", "reference": "1"},
+)
+passage = SourcePassage(
+    kind="source_passage", passage_id="synthetic-lantern-1", reference=reference,
+    text="A folded paper lantern drifted across the imaginary orchard.",
+)
+assert SourcePassage.model_validate_json(passage.model_dump_json()) == passage
+store = PassageStore(registry, [passage])
+result = store.lookup_reference(reference)
+assert result.status is ResolutionStatus.REGISTRY_MATCH
+assert result.passages == (passage,)
+without_text = reference.model_copy(deep=True)
+without_text.locator.reference = "2"
+result = store.lookup_reference(without_text)
+assert result.status is ResolutionStatus.REGISTRY_MATCH and result.passages == ()
+```
+
+A store belongs to the supplied registry snapshot, including a registry returned
+by `build_registry_for_revision()`. Later catalog mutations or replacement never
+automatically update or invalidate it. Explicitly construct a new registry and
+store for another revision; removed/demoted sources, changed matching metadata or
+removed locators cause incompatible retained passages to fail new-store
+construction. The acknowledgment workflow is unchanged. A store establishes no
+catalog revision identity, current adoption, global freshness or authenticated
+approval. It does not promote proposals.
+
+Structural record validity, declared catalog eligibility, registry metadata
+agreement and availability of caller-supplied text are separate guarantees.
+Availability means only that the caller supplied stored text at a matching
+declared citation. It proves no external passage existence, authenticity,
+fidelity, lawful acquisition, canonical status or substantive claim support.
+The discriminator is a caller declaration, not a detector of fabricated or
+mislabeled prose. No claim or passage is evaluated semantically; generated
+roleplay remains separate. Use original synthetic fixtures and fictional metadata;
+do not add copyrighted franchise passages or scraped datasets. No loaders,
+global store, persistence, claim-level retrieval or endpoints are added.
+
 ## Boundaries and deferred work
 
 Pensieve imports no Hogwarts Trials or Burrow Clock internals. Its contracts remain
 product-local; this foundation requires no changes to `commonroom-core`.
-AI integrations, prompts, retrieval/RAG, embeddings, citation authenticity
+AI integrations, prompts, semantic retrieval/RAG, embeddings, citation authenticity
 verification, streaming, news
 ingestion, persistence, authentication, accounts, frontend and deployment are
 explicitly deferred. No simulated AI answers or placeholder lore routes exist.
@@ -367,7 +465,7 @@ explicitly deferred. No simulated AI answers or placeholder lore routes exist.
 Future canonical answers must distinguish supported source tiers (book canon,
 film adaptations and expanded publications), cite identifiable lawful sources,
 and separate generated roleplay from sourced lore. Lore search and question-answering
-endpoints, databases, migrations and pgvector remain deferred. No retrieval or
+endpoints, databases, migrations and pgvector remain deferred. No semantic retrieval or
 citation verification system is implemented here. Follow the
 [content boundaries](../../../docs/ip-and-content-boundaries.md); do not add
 copyrighted passages, proprietary datasets, scraped licensed content or fabricated
