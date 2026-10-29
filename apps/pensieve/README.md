@@ -199,6 +199,47 @@ metadata; do not add copyrighted franchise passages or scraped datasets.
 See the [executable synthetic example](api/README.md#local-source-passages-and-exact-lookup).
 No loaders, global store, external I/O or new endpoints are introduced.
 
+## Claim passage lookup
+
+`lookup_claim_passages(claim: SourcedLoreClaim, store: PassageStore)` revalidates
+the entire mutable claim before any lookup, then calls the store's public
+`lookup_reference()` for every citation in declared order, preserving duplicates
+and continuing after failed lookups. It returns frozen `ClaimPassageLookup` with
+the normalized supplied `statement` and a `references` tuple of frozen
+`ReferencePassages(reference, status, passages)` results. Each retains an
+independent normalized submitted citation, its existing registry status, and all
+matching passages in store construction order. Wrong operation types raise
+`TypeError`; invalid mutable claims retain existing validation errors.
+
+Complete source ID, title, canon tier and locator kind/reference match exactly
+after existing trimming, case-sensitively. `SOURCE_NOT_REGISTERED`,
+`SOURCE_METADATA_MISMATCH` and `LOCATOR_NOT_REGISTERED` preserve that precedence
+and return no text. `REGISTRY_MATCH` can also return no text: registered metadata
+does not imply a locally stored passage.
+
+`all_references_registered` is true only for a nonempty result whose every status
+is `REGISTRY_MATCH`. `all_references_have_passages` additionally requires text at
+every citation. Both are false for an empty result. An all-registered result with
+one text-empty citation therefore reports `True` and `False`, respectively.
+These computed properties describe registration and caller-supplied text
+availability only. Even an unrelated statement can have text at every citation;
+no statement is rewritten, generated or evaluated for substantive support.
+
+Inputs remain unchanged. Nested reference and passage snapshots are mutable
+independent copies, despite frozen outer dataclasses and tuple containers.
+Mutations cannot affect other entries (including duplicates), another call, the
+caller, stored records or registry metadata. Submitted-reference snapshots and
+passage references are separate. Catalog edits do not automatically change an
+existing store or result; explicitly construct a new eligible registry/store to
+observe a replacement, revalidating retained passages. No promotion, revision
+identity, adoption, freshness, authenticated approval or authenticity is inferred.
+
+See the [self-contained synthetic example](api/README.md#claim-passage-lookup),
+which demonstrates duplicate citations and registered metadata without text.
+Examples use original fictional prose and metadata, with no copyrighted franchise
+passages, scraped data or fabricated citations presented as genuine. Semantic
+retrieval/RAG, support verification and question-answering endpoints remain deferred.
+
 The product scope above describes future intentions. AI, semantic retrieval, embeddings,
 citation verification, streaming, news ingestion, persistence, authentication, accounts and a
 web frontend remain deferred. Pensieve cannot yet answer lore questions.
