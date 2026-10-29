@@ -451,7 +451,114 @@ The discriminator is a caller declaration, not a detector of fabricated or
 mislabeled prose. No claim or passage is evaluated semantically; generated
 roleplay remains separate. Use original synthetic fixtures and fictional metadata;
 do not add copyrighted franchise passages or scraped datasets. No loaders,
-global store, persistence, claim-level retrieval or endpoints are added.
+global store, persistence or endpoints are added. Claim-level composition of this
+exact lookup is described below.
+
+## Claim passage lookup
+
+`pensieve_api.domain.claim_passages` adds a small composition of public operations:
+
+- `lookup_claim_passages(claim: SourcedLoreClaim, store: PassageStore)
+  -> ClaimPassageLookup` requires those existing object types. Dictionaries,
+  strings, roleplay, passages and unrelated claims raise `TypeError`; a registry
+  is not a passage store. The entire claim is revalidated from a fresh
+  `model_dump(warnings=False)` before any lookup. Invalid mutable discriminators,
+  statements, source lists and nested references raise existing validation errors,
+  including invalid state in a later citation. Structurally valid metadata
+  mismatches are lookup outcomes instead.
+- Frozen `ReferencePassages` contains `reference: SourceReference`,
+  `status: ResolutionStatus` and `passages: tuple[SourcePassage, ...]`.
+- Frozen `ClaimPassageLookup` contains the normalized supplied `statement: str`
+  and `references: tuple[ReferencePassages, ...]`, with two computed read-only
+  aggregate properties.
+
+The function calls only `store.lookup_reference()` once per validated citation,
+including repeats, in input order. It preserves every failure and continues
+looking up later citations. Each result retains an independent normalized
+snapshot of the submitted citation, its existing status and every matching local
+passage in store construction order. Nothing is sorted, deduplicated or flattened.
+Complete source ID, title, canon tier and locator kind/reference are matched after
+existing whitespace trimming, exactly and case-sensitively, without aliases or
+locator interpretation. The statement is normalized by the existing contract and
+copied without rewriting, summarization, generation or semantic evaluation.
+
+`SOURCE_NOT_REGISTERED`, `SOURCE_METADATA_MISMATCH` and `LOCATOR_NOT_REGISTERED`
+retain existing precedence and contain no passages. `REGISTRY_MATCH` may contain
+an empty tuple: metadata agreement is distinct from local text availability.
+`all_references_registered` is true only when the references tuple is nonempty
+and every status is `REGISTRY_MATCH`. `all_references_have_passages` additionally
+requires a nonempty passage tuple at every citation. Both are false for a directly
+constructed empty result. All registered with one text-empty citation therefore
+means registration is true and availability is false. These properties summarize
+only registration and caller-supplied text availability. An unrelated statement
+with the same citations yields the same lookup outcomes; available text cannot
+establish that it supports the statement, is genuine, canonical, lawfully acquired
+or faithful to an external publication.
+
+Inputs, stores and registries remain unchanged. Every returned reference and
+passage is independent of caller models, other calls and other entries, including
+duplicate citations. The retained submitted-reference snapshot does not alias a
+returned passage's reference. Frozen outer dataclasses and tuples contain mutable
+independent Pydantic snapshots; editing a nested locator or passage cannot change
+another entry, the caller, stored records or registry outcomes.
+
+Catalog mutations do not automatically change an existing store or returned
+result. Explicitly build a replacement registry (including through the unchanged
+`build_registry_for_revision()` acknowledgment workflow) and a new store to
+observe replacement metadata and text. Incompatible retained passages fail
+new-store construction after source removal/demotion or metadata/locator changes.
+Proposals stay excluded unless explicitly made eligible in a new registry.
+No revision identity, current adoption, freshness, authenticated approval or source
+verification is added.
+
+This self-contained example uses fictional metadata and original synthetic prose,
+with no file loading or external I/O. Run it in the configured API environment:
+
+```python
+from pensieve_api.domain.claim_passages import lookup_claim_passages
+from pensieve_api.domain.provenance import SourceReference, SourcedLoreClaim
+from pensieve_api.domain.source_catalog import SourceCatalog
+from pensieve_api.domain.source_passages import PassageStore, SourcePassage
+from pensieve_api.domain.source_registry import ResolutionStatus
+
+catalog = SourceCatalog(schema_version=1, catalog_id="synthetic-claim-v1", entries=[{
+    "source": {
+        "source_id": "synthetic-atlas", "title": "The Folded Lantern Atlas", "canon_tier": "book",
+        "locators": [{"kind": "chapter", "reference": "A"},
+                     {"kind": "chapter", "reference": "B"}],
+    },
+    "curation_status": "metadata_reviewed",
+    "curation_note": "Original fictional eligibility declaration.",
+}])
+reference = SourceReference(
+    source_id="synthetic-atlas", title="The Folded Lantern Atlas", canon_tier="book",
+    locator={"kind": "chapter", "reference": "A"},
+)
+without_text = reference.model_copy(deep=True)
+without_text.locator.reference = "B"
+passage = SourcePassage(
+    kind="source_passage", passage_id="synthetic-lantern", reference=reference,
+    text="A folded paper lantern drifted above the imaginary orchard.",
+)
+store = PassageStore(catalog.build_registry(), [passage])
+claim = SourcedLoreClaim(
+    kind="sourced_lore", statement="An original observation about an invented orchard.",
+    sources=[reference, without_text, reference],
+)
+result = lookup_claim_passages(claim, store)
+assert result.statement == claim.statement
+assert [entry.reference for entry in result.references] == [reference, without_text, reference]
+assert [entry.status for entry in result.references] == [ResolutionStatus.REGISTRY_MATCH] * 3
+assert [entry.passages for entry in result.references] == [(passage,), (), (passage,)]
+assert result.all_references_registered
+assert not result.all_references_have_passages
+```
+
+The repeated first citation remains a separate third outcome with independent
+copies. Neither aggregate evaluates the statement. Generated roleplay remains
+separate; do not add copyrighted franchise passages, scraped data or fabricated
+citations presented as genuine. Semantic retrieval/RAG, support verification,
+generated answers and question-answering endpoints remain deferred.
 
 ## Boundaries and deferred work
 
