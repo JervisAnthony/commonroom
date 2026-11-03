@@ -236,7 +236,7 @@ def test_revalidate_mutated_models_and_reject_wrong_input_types():
         registry().resolve_claim(claim)
 
 
-def test_health_and_openapi_unchanged():
+def test_health_and_lookup_api_surface():
     from pensieve_api.main import app
 
     with TestClient(app) as client:
@@ -244,8 +244,9 @@ def test_health_and_openapi_unchanged():
         assert response.status_code == 200
         assert response.json() == {"status": "ok", "service": "pensieve-api"}
         schema = client.get("/openapi.json").json()
-    assert set(schema["paths"]) == {"/api/v1/health"}
-    assert set(schema["components"]["schemas"]) == {"HealthResponse"}
+    assert set(schema["paths"]) == {"/api/v1/health", "/api/v1/claims/passages/lookup"}
+    assert "HealthResponse" in schema["components"]["schemas"]
+    # The HTTP suite asserts the complete request/response schema surface.
 
 
 def test_fresh_import_and_resolution_without_external_io(tmp_path):

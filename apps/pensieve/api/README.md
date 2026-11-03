@@ -3,7 +3,7 @@
 Pensieve is Commonroom's planned AI companion and lore discovery service, with
 source provenance and guided learning. This implements an
 independent FastAPI application titled **Pensieve API**, a public health route,
-and product-local source provenance contracts.
+a read-only claim passage lookup route, and product-local source provenance contracts.
 It cannot answer lore questions.
 
 `GET /api/v1/health` returns HTTP 200:
@@ -71,8 +71,8 @@ All model fields are required. Text is trimmed before checking for blank values;
 numbers, booleans and bytes are not coerced to strings. Unknown fields are rejected,
 including in nested models. Content kinds and source categories must match exactly.
 The models accept nested dictionaries or model objects and support Pydantic JSON
-serialization and validation. They are internal contracts with no new routes;
-health behavior and the application's OpenAPI schema remain unchanged.
+serialization and validation. The HTTP adapter reuses these contracts for its
+request and response schemas; domain operations remain independently usable.
 
 This example uses entirely fictional metadata and original text:
 
@@ -119,8 +119,9 @@ An empty collection is valid; duplicate normalized source IDs are rejected.
 Construction revalidates and snapshots mutable models into immutable metadata.
 There is no global instance, seeded data, storage, network or external service.
 Changing caller-owned models or result references cannot change registry entries;
-construct a new registry to change registrations. The typed Python results are
-internal objects, with no additional API routes or OpenAPI schemas.
+construct a new registry to change registrations. Domain results remain
+independently usable Python objects. The HTTP adapter exposes only claim passage lookup, reusing
+the existing reference and resolution-status schemas.
 
 `resolve_reference` returns a `ReferenceResolution` with an independent `reference`
 snapshot and a `status`, using this precedence:
@@ -451,8 +452,8 @@ The discriminator is a caller declaration, not a detector of fabricated or
 mislabeled prose. No claim or passage is evaluated semantically; generated
 roleplay remains separate. Use original synthetic fixtures and fictional metadata;
 do not add copyrighted franchise passages or scraped datasets. No loaders,
-global store, persistence or endpoints are added. Claim-level composition of this
-exact lookup is described below.
+global store or persistence is added by this domain module. Claim-level
+composition and its read-only HTTP adapter are described below.
 
 ## Claim passage lookup
 
@@ -559,6 +560,123 @@ copies. Neither aggregate evaluates the statement. Generated roleplay remains
 separate; do not add copyrighted franchise passages, scraped data or fabricated
 citations presented as genuine. Semantic retrieval/RAG, support verification,
 generated answers and question-answering endpoints remain deferred.
+
+## Claim passage lookup HTTP API
+
+`POST /api/v1/claims/passages/lookup` accepts only the existing `SourcedLoreClaim`
+JSON object: required `kind="sourced_lore"`, nonblank `statement`, and a nonempty
+`sources` array of strict `SourceReference` objects. Existing normalization trims
+outer whitespace and preserves interior whitespace and non-ASCII text. Unknown
+fields, roleplay, malformed JSON and invalid nested citations receive the framework's
+standard HTTP 422 validation response. Clients cannot supply a registry, catalog,
+store, trusted text, acknowledgment or authoritative aggregate flags.
+
+A configured lookup returns HTTP 200 with all required fields:
+
+- `statement`: the normalized supplied statement.
+- `references`: an ordered array of `{reference, status, passages}` objects, with
+  normalized submitted references and arrays of existing `SourcePassage` records.
+- `all_references_registered`: the domain operation's registration aggregate.
+- `all_references_have_passages`: the domain operation's local-text aggregate.
+
+Citation order, duplicates and store passage order are preserved. Outcomes retain
+source-ID, title/tier, then locator precedence: `SOURCE_NOT_REGISTERED`,
+`SOURCE_METADATA_MISMATCH` and `LOCATOR_NOT_REGISTERED` have empty passage arrays;
+`REGISTRY_MATCH` may also have no text. These are normal HTTP 200 outcomes, including
+mixed claims, and processing continues after a failure. Matching remains exact and
+case-sensitive. Both booleans describe registration and local passage availability
+only; neither evaluates or verifies the statement, source authenticity, canonical
+authority, lawful acquisition, external passage fidelity or substantive support.
+
+Compose an instance explicitly with
+`create_app(*, passage_store: PassageStore | None = None) -> FastAPI` from
+`pensieve_api.main`. An unrelated supplied object raises `TypeError` during factory
+construction. The `get_passage_store(request)` dependency reads that application's
+state. Stores are per application; creating or querying another app changes no
+other instance. The adapter calls `lookup_claim_passages()` once and projects its
+results and both aggregates without another matching pass or business rules.
+
+`app = create_app()` remains the public default. The standard
+`uvicorn pensieve_api.main:app` command starts this **unconfigured** instance:
+health stays available, but a valid lookup returns HTTP 503 with exactly
+`{"detail": "Passage lookup is not configured"}`. An explicitly supplied empty
+`PassageStore` is **configured** and returns normal HTTP 200 outcomes (for example,
+`SOURCE_NOT_REGISTERED` with an empty registry). No empty store is silently created.
+No examples, catalog files, trusted production passages or environment configuration
+are automatically loaded; no provider, database or external I/O is required.
+
+This endpoint provides **public read access** to the supplied store's passage text.
+Configure only material intended for that access. No authorization or service for
+restricted/private data is added. Requests cause no writes, promotion, adoption,
+request persistence, new payload logging, source evaluation or statement generation.
+Existing store snapshots stay stable after caller catalog/passage mutations or
+client response edits. Explicitly build an eligible replacement registry/store and
+another application to apply revised metadata; the existing acknowledgment and
+proposal-exclusion rules remain unchanged. No adoption, freshness or authenticated
+approval is inferred.
+
+The generated OpenAPI paths are exactly health GET and lookup POST. The lookup
+operation documents the existing request model, typed HTTP 200 and 503 responses,
+and the standard HTTP 422 error; `/docs`, `/redoc` and `/openapi.json` remain available.
+No catalog, governance or roleplay operation is published. Unknown paths return
+HTTP 404; GET on the lookup path returns HTTP 405.
+
+Run this self-contained synthetic HTTP example in the configured API environment:
+
+```python
+from fastapi.testclient import TestClient
+from pensieve_api.domain.provenance import SourceReference, SourcedLoreClaim
+from pensieve_api.domain.source_catalog import SourceCatalog
+from pensieve_api.domain.source_passages import PassageStore, SourcePassage
+from pensieve_api.main import create_app
+
+catalog = SourceCatalog(schema_version=1, catalog_id="synthetic-http-v1", entries=[{
+    "source": {
+        "source_id": "synthetic-atlas", "title": "The Paper Lantern Atlas", "canon_tier": "book",
+        "locators": [{"kind": "chapter", "reference": "A"},
+                     {"kind": "chapter", "reference": "B"}],
+    },
+    "curation_status": "metadata_reviewed",
+    "curation_note": "Original fictional eligibility declaration.",
+}])
+reference = SourceReference(
+    source_id="synthetic-atlas", title="The Paper Lantern Atlas", canon_tier="book",
+    locator={"kind": "chapter", "reference": "A"},
+)
+without_text = reference.model_copy(deep=True)
+without_text.locator.reference = "B"
+passage = SourcePassage(
+    kind="source_passage", passage_id="synthetic-lantern", reference=reference,
+    text="A paper lantern drifted across the imaginary orchard.",
+)
+store = PassageStore(catalog.build_registry(), [passage])
+claim = SourcedLoreClaim(
+    kind="sourced_lore", statement="An original observation about an invented orchard.",
+    sources=[reference, without_text, reference],
+)
+with TestClient(create_app(passage_store=store)) as client:
+    response = client.post("/api/v1/claims/passages/lookup", json=claim.model_dump(mode="json"))
+assert response.status_code == 200
+assert response.json() == {
+    "statement": claim.statement,
+    "references": [
+        {"reference": ref.model_dump(mode="json"), "status": "REGISTRY_MATCH", "passages": texts}
+        for ref, texts in [
+            (reference, [passage.model_dump(mode="json")]),
+            (without_text, []),
+            (reference, [passage.model_dump(mode="json")]),
+        ]
+    ],
+    "all_references_registered": True,
+    "all_references_have_passages": False,
+}
+```
+
+All prose and metadata here are original and fictional. The existing provenance,
+snapshot and [content boundaries](../../../docs/ip-and-content-boundaries.md) still
+apply. Exact citation lookup is not a question-answering system. AI answers,
+semantic retrieval/RAG, support verification, authenticity checks, persistence,
+ingestion, authentication and deployment remain deferred.
 
 ## Boundaries and deferred work
 

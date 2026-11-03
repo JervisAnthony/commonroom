@@ -152,11 +152,12 @@ def test_roleplay_and_sourced_lore_remain_separate():
             model.model_validate(data)
 
 
-def test_domain_contracts_do_not_change_health_or_openapi():
+def test_domain_contracts_preserve_health_with_lookup_api():
     from pensieve_api.main import app
 
     with TestClient(app) as client:
         assert client.get("/api/v1/health").json() == {"status": "ok", "service": "pensieve-api"}
         schema = client.get("/openapi.json").json()
-    assert set(schema["paths"]) == {"/api/v1/health"}
-    assert set(schema["components"]["schemas"]) == {"HealthResponse"}
+    assert set(schema["paths"]) == {"/api/v1/health", "/api/v1/claims/passages/lookup"}
+    assert "HealthResponse" in schema["components"]["schemas"]
+    # The HTTP suite asserts the complete request/response schema surface.
