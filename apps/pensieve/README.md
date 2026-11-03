@@ -9,8 +9,7 @@
 ## Implemented foundation
 
 The independent [Pensieve API](api/README.md) uses Python 3.13+, FastAPI and
-Pydantic in the uv workspace. Its only application endpoint is public
-`GET /api/v1/health`, returning HTTP 200 with
+Pydantic in the uv workspace. Public `GET /api/v1/health` returns HTTP 200 with
 `{"status": "ok", "service": "pensieve-api"}`. OpenAPI documentation is available
 at `/docs`, `/redoc` and `/openapi.json`. See the API README for the pinned runtime,
 uv requirements, external environment setup, startup and validation commands.
@@ -39,7 +38,8 @@ Canon tiers describe source categories, not proof of correctness. Structural
 validation does not verify originality, source authenticity, licensing or actual
 support for a claim. An attributed claim is not automatically a verified canonical
 fact. Generated roleplay remains explicitly distinguishable from sourced lore.
-These models add no API routes or OpenAPI schemas.
+The HTTP lookup adapter reuses these existing request and response types.
+Domain operations remain independently usable.
 
 ## Source registry and reference resolution
 
@@ -66,7 +66,7 @@ verification would assess whether it supports the statement. Only the first two
 are implemented. A registry match proves neither authenticity, lawful acquisition,
 external passage existence, claim support nor canonical or factual correctness.
 The registry uses immutable stored metadata and independent result snapshots;
-caller mutations cannot change registered entries. No API routes are added.
+caller mutations cannot change registered entries. No registry-management routes are added.
 
 ## Versioned curated source catalog
 
@@ -197,7 +197,8 @@ remains separate. Tests and examples use original synthetic text and fictional
 metadata; do not add copyrighted franchise passages or scraped datasets.
 
 See the [executable synthetic example](api/README.md#local-source-passages-and-exact-lookup).
-No loaders, global store, external I/O or new endpoints are introduced.
+The domain module introduces no loaders, global store or external I/O.
+The explicit HTTP adapter is described below.
 
 ## Claim passage lookup
 
@@ -239,6 +240,51 @@ which demonstrates duplicate citations and registered metadata without text.
 Examples use original fictional prose and metadata, with no copyrighted franchise
 passages, scraped data or fabricated citations presented as genuine. Semantic
 retrieval/RAG, support verification and question-answering endpoints remain deferred.
+
+## Claim passage lookup HTTP API
+
+Public `POST /api/v1/claims/passages/lookup` accepts the existing strict
+`SourcedLoreClaim`: required `kind="sourced_lore"`, nonblank `statement`, and
+nonempty `sources`. Malformed requests return standard HTTP 422 errors. Clients
+cannot supply a registry, catalog, store, trusted text or authority flags.
+HTTP 200 returns required `statement`, ordered `references` objects containing
+`reference`, `status` and `passages` arrays, and booleans
+`all_references_registered` and `all_references_have_passages` from the domain
+operation. Normalization, citation order, duplicates and passage order are preserved.
+
+`SOURCE_NOT_REGISTERED`, `SOURCE_METADATA_MISMATCH` and `LOCATOR_NOT_REGISTERED`
+retain their precedence and return empty passage arrays. `REGISTRY_MATCH` may also
+have no text. Unknown sources and mismatches are normal HTTP 200 outcomes; later
+citations still run. Aggregates describe registration and local text availability,
+never source authenticity, canonical authority or substantive claim support.
+
+Explicitly compose `create_app(passage_store=store)` in `pensieve_api.main` with an
+existing `PassageStore`. Each application's dependency reads its own state, keeping
+instances independent. Default `app = create_app()` and the standard
+`uvicorn pensieve_api.main:app` command remain unconfigured: health works and valid
+lookups return HTTP 503 with
+`{"detail": "Passage lookup is not configured"}`. An explicitly supplied empty
+store is configured and returns ordinary HTTP 200 lookup outcomes. No examples,
+catalog files, environment settings or trusted production passages are automatically
+loaded. No provider keys, database or external I/O is needed.
+
+Configuring the endpoint exposes the supplied store's passage text to callers as
+**public read access**. Supply only material intended for that access; no
+authorization or restricted/private-data service is added. Requests perform no
+writes, promotion, adoption, persistence, new payload logging or prose evaluation.
+Existing snapshot, provenance and content/IP boundaries remain in force. Caller
+catalog/passage mutations and client response edits do not change an existing
+store; build an explicit eligible replacement registry/store and application to
+apply revisions, preserving proposal exclusion and acknowledgment semantics.
+
+The [executable HTTP example](api/README.md#claim-passage-lookup-http-api) builds a
+synthetic eligible registry/store, posts duplicate citations and a registered
+citation without text, and asserts the complete HTTP JSON result. Generated OpenAPI
+contains exactly health GET and lookup POST, with typed 200/503 and standard 422
+contracts. No catalog, governance or roleplay operations are exposed.
+AI answers, semantic retrieval/RAG, support verification, authenticity checks,
+persistence, ingestion, authentication and deployment remain deferred. Exact
+citation lookup is not a question-answering system.
 
 The product scope above describes future intentions. AI, semantic retrieval, embeddings,
 citation verification, streaming, news ingestion, persistence, authentication, accounts and a

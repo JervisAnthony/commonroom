@@ -314,7 +314,7 @@ def test_explicit_catalog_revision_store_replacement(eligibility, metadata):
     assert lookup_claim_passages(claim(replacement_ref), new_store) == compatible
 
 
-def test_health_and_openapi_unchanged():
+def test_health_and_lookup_api_surface():
     from pensieve_api.main import app
 
     with TestClient(app) as client:
@@ -322,8 +322,9 @@ def test_health_and_openapi_unchanged():
         assert response.status_code == 200
         assert response.json() == {"status": "ok", "service": "pensieve-api"}
         schema = client.get("/openapi.json").json()
-    assert set(schema["paths"]) == {"/api/v1/health"}
-    assert set(schema["components"]["schemas"]) == {"HealthResponse"}
+    assert set(schema["paths"]) == {"/api/v1/health", "/api/v1/claims/passages/lookup"}
+    assert "HealthResponse" in schema["components"]["schemas"]
+    # The HTTP suite asserts the complete request/response schema surface.
 
 
 def test_fresh_process_claim_lookup_without_configuration_or_external_io(tmp_path):
@@ -352,7 +353,6 @@ def test_fresh_process_claim_lookup_without_configuration_or_external_io(tmp_pat
 
         sys.addaudithook(reject_external_io)
         from pensieve_api.main import app
-        assert "pensieve_api.domain.claim_passages" not in sys.modules
         from pensieve_api.domain.claim_passages import lookup_claim_passages
         from pensieve_api.domain.source_catalog import SourceCatalog
         from pensieve_api.domain.source_passages import SourcePassage, PassageStore
