@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "catalog": {
+    "schema_version": 1,
+    "catalog_id": "synthetic-folded-atlas-v1",
+    "entries": [
+      {
+        "source": {
+          "source_id": "synthetic-atlas",
+          "title": "The Folded Lantern Atlas",
+          "canon_tier": "book",
+          "locators": [
+            {"kind": "chapter", "reference": "A"},
+            {"kind": "chapter", "reference": "B"}
+          ]
+        },
+        "curation_status": "metadata_reviewed",
+        "curation_note": "Invented book metadata declared eligible by this example's author; no external source verified."
+      },
+      {
+        "source": {
+          "source_id": "synthetic-film",
+          "title": "The Paper Tide Observatory",
+          "canon_tier": "film",
+          "locators": [{"kind": "scene", "reference": "Dawn"}]
+        },
+        "curation_status": "proposed",
+        "curation_note": "Invented film proposal retained for discussion and excluded from matching."
+      }
+    ]
+  },
+  "passages": [
+    {
+      "kind": "source_passage",
+      "passage_id": "arrival",
+      "reference": {
+        "source_id": "synthetic-atlas",
+        "title": "The Folded Lantern Atlas",
+        "canon_tier": "book",
+        "locator": {"kind": "chapter", "reference": "A"}
+      },
+      "text": "At dawn, Inès unfolded a paper lantern beside the café."
+    },
+    {
+      "kind": "source_passage",
+      "passage_id": "departure",
+      "reference": {
+        "source_id": "synthetic-atlas",
+        "title": "The Folded Lantern Atlas",
+        "canon_tier": "book",
+        "locator": {"kind": "chapter", "reference": "A"}
+      },
+      "text": "Then the lantern drifted toward an orchard of blue paper leaves."
+    }
+  ]
+}

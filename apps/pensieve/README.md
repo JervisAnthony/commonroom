@@ -296,3 +296,102 @@ separately from sourced lore. Follow the
 [IP and content boundaries](../../docs/ip-and-content-boundaries.md).
 Commonroom is an unofficial fan project, unaffiliated with franchise rights holders.
 
+## Versioned passage bundles
+
+Import `PassageBundle` from `pensieve_api.domain.passage_bundle`. It is a strict
+Pydantic document with exactly three required fields and no defaults:
+`schema_version: Literal[1]` (the exact integer, excluding booleans and floats),
+`catalog: SourceCatalog` and `passages: list[SourcePassage]`. The passage list
+is ordered and may be empty; tuples, generators, unrelated records and unknown
+fields are rejected. Existing nested contracts, normalization and JSON round trips
+apply unchanged, preserving interior whitespace, non-ASCII text and record order.
+
+Parsing validates structure, including catalog source-ID uniqueness, without
+constructing a registry or store. Structurally valid documents can fail
+`build_store()`: the existing `PassageStore` rejects duplicate normalized passage
+IDs and references incompatible with eligible registry metadata. Case-distinct IDs
+are distinct; distinct IDs may share identical text and a citation. Eligible
+citations may have no text, and empty or all-proposed catalogs are valid.
+Proposals remain excluded; inclusion never promotes them.
+
+`build_store() -> PassageStore` revalidates the complete current bundle from a fresh
+`model_dump(warnings=False)`, including proposals and every nested reference,
+before any construction. It calls the validated catalog's public
+`build_registry()` once, then constructs one existing `PassageStore` from that
+registry and the ordered passages. Exceptions propagate without filtering or
+partial success. Each call creates independent snapshots. Caller edits, collection
+changes and returned passage/reference edits cannot change earlier stores; later
+valid builds reflect explicit edits, while failed builds leave inputs and earlier
+stores intact. There is no cache, active bundle, loader or automatic file discovery.
+
+This uses direct catalog construction. For guarded replacement, callers must
+continue using `compare_catalogs()`, `acknowledge_catalog_changes()` and
+`build_registry_for_revision()`, followed by explicit `PassageStore` construction.
+That opt-in workflow still requires an exact baseline/candidate acknowledgment and
+a distinct catalog ID for changed documents. **Catalog acknowledgment does not
+cover passage text or the complete bundle.** A passage-only edit is not an
+acknowledged transition merely because the catalog ID stays the same; no new
+passage revision approval policy is supplied.
+
+`schema_version` identifies the serialization format; `catalog.catalog_id` is a
+caller-declared metadata catalog identity; passage text is unverified local content.
+None establishes current adoption, freshness, authenticated approval, source
+authenticity, lawful acquisition, external passage fidelity, canonical authority or
+substantive claim support. Matching remains exact and case-sensitive after trimming.
+
+The [synthetic passage bundle](api/examples/synthetic_passage_bundle.v1.json) contains fictional metadata and original
+prose: two ordered passages at book chapter A, registered chapter B without text,
+and an excluded proposed film. It is an explicit example, never automatically loaded
+or trusted production data. From the repository root, with the external uv
+environment configured per Local development in the API README, run this PowerShell example:
+
+```powershell
+@'
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+
+from pensieve_api.domain.passage_bundle import PassageBundle
+from pensieve_api.main import create_app
+
+bundle = PassageBundle.model_validate_json(
+    Path("apps/pensieve/api/examples/synthetic_passage_bundle.v1.json")
+    .read_text(encoding="utf-8")
+)
+store = bundle.build_store()
+application = create_app(passage_store=store)
+a = bundle.passages[0].reference.model_dump(mode="json")
+b = a | {"locator": {"kind": "chapter", "reference": "B"}}
+claim = {
+    "kind": "sourced_lore",
+    "statement": "A fictional lantern arrives.",
+    "sources": [a, b, a],
+}
+with TestClient(application) as client:
+    response = client.post("/api/v1/claims/passages/lookup", json=claim)
+    assert response.status_code == 200
+    body = response.json()
+assert [r["reference"] for r in body["references"]] == [a, b, a]
+assert [r["status"] for r in body["references"]] == ["REGISTRY_MATCH"] * 3
+assert [len(r["passages"]) for r in body["references"]] == [2, 0, 2]
+expected = [p.model_dump(mode="json") for p in bundle.passages]
+assert [p["passage_id"] for p in expected] == ["arrival", "departure"]
+assert [r["passages"] for r in body["references"]] == [expected, [], expected]
+assert body["all_references_registered"] is True
+assert body["all_references_have_passages"] is False
+'@ | uv run --frozen --project apps/pensieve/api python -
+```
+
+File reading is an explicit caller action. Standard
+`uvicorn pensieve_api.main:app` remains unconfigured: valid lookups return the
+existing HTTP 503 while health and docs remain available. This is a serializable
+data contract, with no file-backed startup factory, new HTTP operation or OpenAPI
+bundle/catalog schema.
+
+Passing this store to `create_app()` intentionally exposes its text through the
+existing **public-read endpoint**. Configure only material intended for that
+access. Parsing/building supplies no authorization or private-data service.
+Existing provenance and content/IP limits still apply: use original synthetic
+examples, never copyrighted franchise passages or scraped datasets. AI answers,
+retrieval/search/ranking, support verification, authenticity checks, ingestion,
+persistence, authentication and deployment remain deferred.
