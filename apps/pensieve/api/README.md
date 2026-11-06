@@ -204,9 +204,9 @@ result is produced.
 
 The [synthetic version 1 example](examples/synthetic_catalog.v1.json) contains
 one eligible fictional book and one proposed fictional film. It is demonstration
-data, not a trusted production catalog. No catalog is discovered or loaded at
-import or startup; there is no global registry, file scanning, retrieval, storage,
-new configuration or external I/O.
+data, not a trusted production catalog. Imports and default startup load no data.
+The catalog domain has no global registry, file scanning, retrieval, storage,
+configuration or external I/O; the explicit adapter below reads a selected bundle.
 
 Run this example from the repository root in the configured API environment.
 The caller explicitly chooses to read the example file:
@@ -787,8 +787,8 @@ assert body["all_references_have_passages"] is False
 File reading is an explicit caller action. Standard
 `uvicorn pensieve_api.main:app` remains unconfigured: valid lookups return the
 existing HTTP 503 while health and docs remain available. This is a serializable
-data contract, with no file-backed startup factory, new HTTP operation or OpenAPI
-bundle/catalog schema.
+data contract with no new HTTP operation or OpenAPI bundle/catalog schema. The
+explicit file startup adapter below composes it outside the I/O-free domain.
 
 Passing this store to `create_app()` intentionally exposes its text through the
 existing **public-read endpoint**. Configure only material intended for that
@@ -797,3 +797,107 @@ Existing provenance and content/IP limits still apply: use original synthetic
 examples, never copyrighted franchise passages or scraped datasets. AI answers,
 retrieval/search/ranking, support verification, authenticity checks, ingestion,
 persistence, authentication and deployment remain deferred.
+
+## Explicit bundle file startup
+
+`pensieve_api.bundle_app.create_app_from_bundle_file(path: str | pathlib.Path)
+-> FastAPI` constructs the existing API from one explicitly chosen local bundle.
+It accepts strings and concrete `Path` objects; unrelated types raise `TypeError`
+and blank string paths raise `ValueError` before I/O. Other path characters are
+preserved, including meaningful spaces and non-ASCII names. Relative paths use
+the caller's current directory; absolute paths are supported. There is no
+environment-variable or home expansion, URL interpretation, search or discovery.
+
+Each call reads only the selected file once with `encoding="utf-8-sig"` (UTF-8
+with an optional leading BOM), parses the complete text with
+`PassageBundle.model_validate_json()`, calls `build_store()` once, then passes
+that store to the existing `create_app()`. Programmatic file, decoding,
+validation and construction exceptions propagate without a fallback app.
+The factory never starts a server or modifies `pensieve_api.main.app`.
+
+From the repository root, using the external uv environment described in the
+API README's Local development section:
+
+```powershell
+uv run --frozen --project apps/pensieve/api python -m pensieve_api.bundle_app --help
+uv run --frozen --project apps/pensieve/api python -m pensieve_api.bundle_app --bundle "apps/pensieve/api/examples/synthetic_passage_bundle.v1.json"
+# Optional local port:
+uv run --frozen --project apps/pensieve/api python -m pensieve_api.bundle_app --bundle "apps/pensieve/api/examples/synthetic_passage_bundle.v1.json" --port 8104
+```
+
+`--bundle PATH` is required. `--port PORT` defaults to 8000 and accepts integers
+1 through 65535. Argument errors exit 2; help exits 0 without loading. Expected
+loading failures print a concise stderr diagnostic without raw JSON or passage
+text and return 1 before starting the server. Programming and server/runtime
+failures propagate normally. Successful startup runs uvicorn on **127.0.0.1**,
+with one worker and reload disabled; the command returns 0 when the runner returns
+normally. There are no host, reload, worker or environment configuration options.
+
+The standard `uvicorn pensieve_api.main:app` still starts the unconfigured
+application: valid lookups return HTTP 503, while health and docs work. Importing
+the new module loads no bundle or application configuration and starts no server.
+Installed wheels contain `pensieve_api/bundle_app.py`; the synthetic JSON remains
+a repository example. Operators supply their own explicit local document.
+
+Each created app holds an independent load-once snapshot. Requests never reread
+the bundle. File edits or deletion and response edits cannot change earlier apps.
+Explicitly reconstruct or restart to observe changed data; a failed reconstruction
+leaves earlier apps intact. There is no watching, hot reload, background refresh,
+global configured cache or fallback discovery.
+
+This uses direct `PassageBundle.build_store()` construction, without inventing a
+baseline or acknowledgment. Guarded catalog replacement still requires explicit
+`compare_catalogs()`, `acknowledge_catalog_changes()`,
+`build_registry_for_revision()` and `PassageStore` composition. Catalog
+acknowledgment binds catalog documents, not passage text or a complete bundle.
+Reconstruction is neither authenticated approval, persistent adoption nor
+freshness enforcement. Existing proposal exclusion remains unchanged.
+
+For an in-process example, run this PowerShell block from the repository root:
+
+```powershell
+@'
+from fastapi.testclient import TestClient
+
+from pensieve_api.bundle_app import create_app_from_bundle_file
+
+application = create_app_from_bundle_file(
+    "apps/pensieve/api/examples/synthetic_passage_bundle.v1.json"
+)
+a = {
+    "source_id": "synthetic-atlas",
+    "title": "The Folded Lantern Atlas",
+    "canon_tier": "book",
+    "locator": {"kind": "chapter", "reference": "A"},
+}
+b = a | {"locator": {"kind": "chapter", "reference": "B"}}
+with TestClient(application) as client:
+    response = client.post("/api/v1/claims/passages/lookup", json={
+        "kind": "sourced_lore",
+        "statement": "A fictional lantern arrives.",
+        "sources": [a, b, a],
+    })
+    assert response.status_code == 200
+    body = response.json()
+assert [r["reference"] for r in body["references"]] == [a, b, a]
+assert [r["status"] for r in body["references"]] == ["REGISTRY_MATCH"] * 3
+assert [len(r["passages"]) for r in body["references"]] == [2, 0, 2]
+assert [p["passage_id"] for p in body["references"][0]["passages"]] == [
+    "arrival", "departure"
+]
+assert body["references"][0]["passages"] == body["references"][2]["passages"]
+assert body["all_references_registered"] is True
+assert body["all_references_have_passages"] is False
+'@ | uv run --frozen --project apps/pensieve/api python -
+```
+
+Configured text is exposed through the existing **public-read lookup endpoint**.
+Loopback binding supplies no application authorization; use only material intended
+for that access. This is not a private-data service. Parsing, registration and text
+availability establish no authenticity, canonical authority, lawful acquisition,
+external fidelity or substantive claim support. Use fictional metadata and original
+prose, respecting existing content/IP boundaries; never add copyrighted franchise
+passages or scraped datasets. The domain remains free of I/O, and no API operation
+or OpenAPI contract changes. AI answers, search/ranking/RAG, source/support
+verification, scraping/content-ingestion pipelines, persistence, authentication,
+frontend and deployment remain deferred.
