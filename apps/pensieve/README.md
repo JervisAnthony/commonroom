@@ -18,6 +18,10 @@ Import and health need no database, pgvector, external services, provider keys o
 environment configuration. Pensieve has no dependencies on other application
 internals and requires no shared-core changes.
 
+The [Pensieve web foundation](web/README.md) is a responsive Next.js homepage with
+server-rendered service availability and manual refresh. Health confirms service
+connectivity only; passage configuration and source verification are separate.
+
 ## Source provenance contracts
 
 Product-local Pydantic contracts now represent source attribution: `CanonTier`
@@ -288,8 +292,8 @@ persistence, ingestion, authentication and deployment remain deferred. Exact
 citation lookup is not a question-answering system.
 
 The product scope above describes future intentions. AI, semantic retrieval, embeddings,
-citation verification, streaming, news ingestion, persistence, authentication, accounts and a
-web frontend remain deferred. Pensieve cannot yet answer lore questions.
+citation verification, streaming, news ingestion, persistence, authentication,
+accounts and claim lookup UI remain deferred. Pensieve cannot yet answer lore questions.
 
 Future answers must distinguish supported canonical source tiers, including books
 versus films, cite identifiable lawful sources, and label generated roleplay
@@ -499,4 +503,4 @@ prose, respecting existing content/IP boundaries; never add copyrighted franchis
 passages or scraped datasets. The domain remains free of I/O, and no API operation
 or OpenAPI contract changes. AI answers, search/ranking/RAG, source/support
 verification, scraping/content-ingestion pipelines, persistence, authentication,
-frontend and deployment remain deferred.
+claim lookup UI and deployment remain deferred.
