@@ -1,0 +1,27 @@
+:root { color-scheme: light; --ink: #183b36; --muted: #4d655e; --paper: #f4f3ed; --line: #cad3c8; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: system-ui, sans-serif; line-height: 1.65; }
+a { color: inherit; }
+a:focus-visible, main:focus-visible { outline: 3px solid #98601d; outline-offset: 5px; }
+.skip-link { position: absolute; top: -5rem; left: 1rem; padding: .7rem 1rem; background: white; z-index: 1; }
+.skip-link:focus { top: 1rem; }
+.masthead { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1rem; padding: 1.5rem clamp(1.25rem, 6vw, 6rem); border-bottom: 1px solid var(--line); font-size: .85rem; }
+.wordmark { font-weight: 750; letter-spacing: .06em; }
+main { max-width: 80rem; margin: auto; display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: clamp(2rem, 7vw, 7rem); padding: clamp(3rem, 8vw, 7rem) clamp(1.25rem, 6vw, 6rem); align-items: start; }
+.eyebrow { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .13em; margin: 0 0 1.5rem; }
+h1 { font-family: Georgia, serif; font-size: clamp(3.5rem, 7vw, 6rem); font-weight: 400; letter-spacing: -.055em; line-height: 1.05; margin: 0 0 1.75rem; }
+h2 { line-height: 1.3; }
+.lead { font-family: Georgia, serif; font-size: clamp(1.4rem, 2.5vw, 1.85rem); line-height: 1.4; }
+.introduction > p:not(.eyebrow) { max-width: 35rem; }
+.principle { border-top: 1px solid var(--line); margin-top: 3rem; padding-top: 1.5rem; display: flex; gap: 1.5rem; }
+.principle > span { color: var(--muted); padding-top: .25rem; font-size: .8rem; }
+.principle h2 { font-size: 1rem; margin: 0; }
+.principle p { color: var(--muted); font-size: .9rem; margin-bottom: 0; }
+.availability { border: 1px solid var(--line); border-top: 4px solid var(--ink); background: #e8ede4; padding: clamp(1.5rem, 3vw, 2.5rem); }
+.status-mark { border: 1px solid #789080; border-radius: 50%; width: 3rem; height: 3rem; display: grid; place-items: center; font-size: 1.5rem; margin: 2.5rem 0 1.5rem; }
+.availability h2 { font-family: Georgia, serif; font-size: 1.9rem; font-weight: 400; margin: 0; }
+.refresh { display: flex; justify-content: space-between; gap: 1rem; padding: .85rem 1rem; margin-top: 2rem; color: white; background: var(--ink); text-decoration: none; font-size: .9rem; font-weight: 650; }
+.refresh:hover { background: #29574b; text-decoration: underline; }
+.status-note { font-size: .8rem; color: var(--muted); margin-bottom: 0; }
+footer { border-top: 1px solid var(--line); padding: 1.5rem clamp(1.25rem, 6vw, 6rem); color: var(--muted); font-size: .75rem; }
+@media (max-width: 700px) { main { grid-template-columns: minmax(0, 1fr); } .masthead { font-size: .75rem; } }
