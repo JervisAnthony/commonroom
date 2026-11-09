@@ -22,6 +22,11 @@ The [Pensieve web foundation](web/README.md) is a responsive Next.js homepage wi
 server-rendered service availability and manual refresh. Health confirms service
 connectivity only; passage configuration and source verification are separate.
 
+The [web claim-passage boundary](web/README.md#claim-passage-lookup-boundary)
+adds a same-origin JSON POST backed by strict product-local TypeScript parsing,
+request-bound response snapshots and a server-only API client. Lookup UI remains
+deferred; normal negative citation outcomes are data, not service failures.
+
 ## Source provenance contracts
 
 Product-local Pydantic contracts now represent source attribution: `CanonTier`

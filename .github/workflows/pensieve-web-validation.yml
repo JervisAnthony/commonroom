@@ -70,7 +70,7 @@ jobs:
       - name: Typecheck
         run: pnpm --filter pensieve-web run typecheck
 
-      - name: Test service health boundary
+      - name: Test health and claim lookup boundaries
         run: pnpm --filter pensieve-web run test
 
       - name: Build
