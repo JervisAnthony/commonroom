@@ -17,7 +17,10 @@ The response uses a typed Pydantic model. Unknown API paths return ordinary HTTP
 generated OpenAPI schema at `/openapi.json`.
 
 The [web foundation](../web/README.md) provides a homepage and service availability
-check. Claim submission and passage browsing interfaces remain deferred.
+check. Its [claim-passage web boundary](../web/README.md#claim-passage-lookup-boundary)
+adapts the existing lookup through a same-origin POST with strict runtime wire
+validation. The API remains independently usable; claim submission and passage
+browsing interfaces remain deferred.
 
 ## Local development
 
