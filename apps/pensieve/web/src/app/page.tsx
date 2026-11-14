@@ -1,4 +1,5 @@
 import { checkPensieveHealth } from "../server/pensieve-health";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -11,7 +12,8 @@ export default async function Home() {
         <p className="eyebrow">A Commonroom project</p>
         <h1 id="page-title">Pensieve</h1>
         <p className="lead">A place for thoughtful lore discovery, built around source provenance.</p>
-        <p>This first web foundation lets you check whether the Pensieve service is reachable. Question answering and passage browsing are future work.</p>
+        <p>Look up available passages using your own statement and exact source citations, or check whether the Pensieve service is reachable. Question answering remains future work.</p>
+        <p><Link href="/claims/passages">Open claim passage lookup</Link></p>
         <div className="principle"><span aria-hidden="true">01</span><div><h2>Sources before stories</h2><p>Connectivity is one small step. Source attribution, passage availability, and verification are separate concerns.</p></div></div>
       </section>
       <section className="availability" aria-labelledby="availability-title">

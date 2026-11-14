@@ -24,8 +24,11 @@ connectivity only; passage configuration and source verification are separate.
 
 The [web claim-passage boundary](web/README.md#claim-passage-lookup-boundary)
 adds a same-origin JSON POST backed by strict product-local TypeScript parsing,
-request-bound response snapshots and a server-only API client. Lookup UI remains
-deferred; normal negative citation outcomes are data, not service failures.
+request-bound response snapshots and a server-only API client. The
+[structured lookup page](web/README.md#structured-form-walkthrough) at
+`/claims/passages` accepts an original statement and ordered citations, displays
+available text and supports manual retry. Drafts/results are in memory only;
+normal negative citation outcomes are data, not service failures.
 
 ## Source provenance contracts
 
@@ -298,7 +301,7 @@ citation lookup is not a question-answering system.
 
 The product scope above describes future intentions. AI, semantic retrieval, embeddings,
 citation verification, streaming, news ingestion, persistence, authentication,
-accounts and claim lookup UI remain deferred. Pensieve cannot yet answer lore questions.
+accounts and open-ended lore search/chat remain deferred. Pensieve cannot yet answer lore questions.
 
 Future answers must distinguish supported canonical source tiers, including books
 versus films, cite identifiable lawful sources, and label generated roleplay
@@ -508,4 +511,4 @@ prose, respecting existing content/IP boundaries; never add copyrighted franchis
 passages or scraped datasets. The domain remains free of I/O, and no API operation
 or OpenAPI contract changes. AI answers, search/ranking/RAG, source/support
 verification, scraping/content-ingestion pipelines, persistence, authentication,
-claim lookup UI and deployment remain deferred.
+open-ended lore search/chat and deployment remain deferred.
