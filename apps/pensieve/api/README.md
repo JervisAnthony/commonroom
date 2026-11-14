@@ -19,8 +19,9 @@ generated OpenAPI schema at `/openapi.json`.
 The [web foundation](../web/README.md) provides a homepage and service availability
 check. Its [claim-passage web boundary](../web/README.md#claim-passage-lookup-boundary)
 adapts the existing lookup through a same-origin POST with strict runtime wire
-validation. The API remains independently usable; claim submission and passage
-browsing interfaces remain deferred.
+validation. Its [structured lookup page](../web/README.md#structured-form-walkthrough)
+accepts ordered citations and displays available passages with manual retry.
+The API remains independently usable; open-ended lore search/chat remains deferred.
 
 ## Local development
 
@@ -690,7 +691,7 @@ Pensieve imports no Hogwarts Trials or Burrow Clock internals. Its contracts rem
 product-local; this foundation requires no changes to `commonroom-core`.
 AI integrations, prompts, semantic retrieval/RAG, embeddings, citation authenticity
 verification, streaming, news
-ingestion, persistence, authentication, accounts, claim lookup UI and deployment are
+ingestion, persistence, authentication, accounts, open-ended lore search/chat and deployment are
 explicitly deferred. No simulated AI answers or placeholder lore routes exist.
 
 Future canonical answers must distinguish supported source tiers (book canon,
@@ -906,4 +907,4 @@ prose, respecting existing content/IP boundaries; never add copyrighted franchis
 passages or scraped datasets. The domain remains free of I/O, and no API operation
 or OpenAPI contract changes. AI answers, search/ranking/RAG, source/support
 verification, scraping/content-ingestion pipelines, persistence, authentication,
-claim lookup UI and deployment remain deferred.
+open-ended lore search/chat and deployment remain deferred.

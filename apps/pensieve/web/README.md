@@ -1,9 +1,9 @@
 # Pensieve web
 
-Pensieve's first web workspace provides a responsive homepage and live service
-availability. It uses Next.js App Router server components, React and strict
-TypeScript. It has no claim-submission or passage-browsing interface and cannot
-answer lore questions.
+Pensieve provides a responsive homepage, live service availability and a structured
+claim-passage lookup at `/claims/passages`. It uses Next.js App Router server
+components, React and strict TypeScript. Exact citation lookup cannot answer lore
+questions or evaluate a statement's support.
 
 ## Local development
 
@@ -85,8 +85,8 @@ and substantive claim verification are separate concerns.
 
 `POST /api/claims/passages/lookup` is the same-origin web JSON operation. Its
 server client calls only `POST /api/v1/claims/passages/lookup` on the configured
-API origin. There is no browser client or claim entry/results interface yet;
-the homepage and its health behavior are unchanged.
+API origin. The structured form uses a browser-safe client for this operation;
+the homepage's full-page health refresh remains independent of lookup.
 
 From the repository root, configure the external Python environment as above,
 then start the existing explicit synthetic bundle in a separate terminal:
@@ -129,6 +129,59 @@ $result | ConvertTo-Json -Depth 12
 The example returns two passages in bundle order (`arrival`, `departure`),
 including the original Unicode text. This is an explicitly selected synthetic
 example; no bundle loads automatically.
+
+### Structured form walkthrough
+
+With the explicit bundle running in the first terminal and the web server in the
+second terminal as above, open <http://localhost:3001/claims/passages> (also linked
+from the homepage). The form starts with a blank statement and one blank citation;
+only the category (`Book`) and locator kind (`Chapter`) have defaults.
+
+1. Enter an original statement, for example `A fictional lantern arrives.`
+2. Enter source ID `synthetic-atlas`, title `The Folded Lantern Atlas`, category
+   `Book`, locator kind `Chapter`, and locator reference `A`.
+3. Select **Look up passages**. Both passages appear in order (`arrival`,
+   `departure`), preserving Unicode and interior whitespace. The submitted
+   statement is shown with both registration and availability aggregates.
+4. Select **Add citation** and enter the same metadata again. The two citation
+   outcomes remain separate and in displayed order. Rows have local stable keys
+   independent of their source IDs; removing one preserves the other rows.
+5. Change the second locator reference to `B` and submit again. It displays
+   **Citation matched** with an explicit no-text explanation. All citations match,
+   but passages are not available for every citation.
+6. A wrong source ID, title or locator produces **Source not registered**,
+   **Source metadata mismatch** or **Locator not registered**, respectively.
+   The proposed `synthetic-film` / `The Paper Tide Observatory` / `Film` /
+   `Scene` / `Dawn` is excluded and returns **Source not registered**.
+
+These are successful lookup outcomes, not service failures. Matching and available
+text establish neither authenticity, licensing/rights, canonical truth nor claim
+support. All supplied metadata and passage text render as ordinary text, with no
+HTML/Markdown processing or automatic links.
+
+Complete validation happens before networking, including later citations and
+malformed UTF-16. Controls are disabled while submitting, a pending message is
+announced, and rapid repeated submission starts only one active request. Previous
+results clear on submission or any edit. Failures preserve entries for manual retry:
+the default API without a store gives a fixed **not configured** message; a stopped
+or failing backend gives a generic **temporarily unavailable** message. Health is
+neither a configuration guarantee nor a submission gate.
+
+The browser sends one fixed relative JSON POST, omits credentials and disables
+caching/redirects. Its five-second deadline covers fetch and body reading, allowing
+for the server's three-second backend deadline. Cancellation aborts the owned
+request and bounds the caller even when a transport ignores abort. Timers and
+external abort listeners are removed on completion. Leaving the page aborts the
+component's request; obsolete completions cannot publish results or clear another
+request's busy state. Only completely validated request-bound data is rendered;
+failure messages never display raw exceptions, origins or backend bodies.
+
+Drafts and results are held in memory only. Refreshing or leaving the page clears
+local work; there is no URL state, browser storage, cookie, automatic submission,
+retry or polling. JavaScript is required; the explicit POST action prevents a
+missing-script submission from putting entries in a GET query string. The JSON
+endpoint does not offer a URL-encoded fallback. The public-text boundary below
+still applies; this is not a service for private passages.
 
 The pure `parseSourcedLoreClaim(value)` and
 `parseClaimPassageResponse(value, claim)` adapters return independently owned
@@ -194,8 +247,8 @@ availability and substantive claim support are separate. Matching metadata and
 available text prove neither authenticity, rights, canon ranking nor claim support.
 
 **Configured passage text remains publicly accessible without application
-authorization.** Configure only material intended for public read access. UI,
-authentication, AI/provider integration, ingestion, deployment and substantive
+authorization.** Configure only material intended for public read access.
+Open-ended lore search/chat, authentication, AI/provider integration, ingestion, deployment and substantive
 source/claim verification remain deferred.
 
 ## Product and content boundaries
